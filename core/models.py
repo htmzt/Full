@@ -149,9 +149,7 @@ class AcceptanceStaging(models.Model):
 class MergedData(models.Model):
     """Physical table storing merged PO + Acceptance data"""
     
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, db_index=True)
-    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)    
     # PO Identifier
     po_id = models.CharField(max_length=200, db_index=True)  # Format: "po_number-po_line_no"
     po_number = models.CharField(max_length=100, db_index=True)
@@ -218,10 +216,11 @@ class MergedData(models.Model):
     class Meta:
         db_table = 'merged_data'
         indexes = [
-            models.Index(fields=['user', 'po_number', 'po_line_no'], name='idx_merged_po'),
-            models.Index(fields=['user', 'is_assigned'], name='idx_merged_assigned'),
-            models.Index(fields=['user', 'has_external_po'], name='idx_merged_external'),
+            models.Index(fields=['po_number', 'po_line_no'], name='idx_merged_po'),
+            models.Index(fields=['is_assigned'], name='idx_merged_assigned'),
+            models.Index(fields=['has_external_po'], name='idx_merged_external'),
             models.Index(fields=['batch_id'], name='idx_merged_batch'),
+            models.Index(fields=['status'], name='idx_merged_status'),
         ]
     
     def __str__(self):
@@ -336,7 +335,6 @@ class PurchaseOrder(models.Model):
     """Permanent PO data storage"""
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     batch_id = models.UUIDField(db_index=True)
     
     # PO Identifier
@@ -415,10 +413,10 @@ class PurchaseOrder(models.Model):
     
     class Meta:
         db_table = 'purchase_orders'
-        unique_together = [['user', 'po_number', 'po_line_no', 'batch_id']]
+        unique_together = [['po_number', 'po_line_no', 'batch_id']]
         indexes = [
-            models.Index(fields=['user', 'batch_id'], name='idx_po_user_batch'),
-            models.Index(fields=['user', 'po_number', 'po_line_no'], name='idx_po_lookup'),
+            models.Index(fields=['batch_id']),
+            models.Index(fields=['po_number', 'po_line_no']),
         ]
     
     def __str__(self):
@@ -429,7 +427,6 @@ class Acceptance(models.Model):
     """Permanent Acceptance data storage"""
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     batch_id = models.UUIDField(db_index=True)
     
     # Acceptance identifiers
@@ -486,10 +483,10 @@ class Acceptance(models.Model):
     
     class Meta:
         db_table = 'acceptances'
-        unique_together = [['user', 'acceptance_no', 'po_number', 'po_line_no', 'batch_id']]
+        unique_together = [['acceptance_no', 'po_number', 'po_line_no', 'batch_id']]
         indexes = [
-            models.Index(fields=['user', 'batch_id'], name='idx_acc_user_batch'),
-            models.Index(fields=['user', 'po_number', 'po_line_no'], name='idx_acc_lookup'),
+            models.Index(fields=['batch_id']),
+            models.Index(fields=['po_number', 'po_line_no']),
         ]
     
     def __str__(self):
