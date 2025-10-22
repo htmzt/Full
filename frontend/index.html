@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PO Management System</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏗️ PO Management System</h1>
+            <div id="user-info" style="display: none;">
+                <span id="user-email"></span> | 
+                <span id="user-role"></span> | 
+                <button onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <nav id="main-nav" style="display: none;">
+            <ul>
+                <li><a href="#" onclick="showSection('dashboard')">Dashboard</a></li>
+                <li><a href="#" onclick="showSection('upload')">Upload Files</a></li>
+                <li><a href="#" onclick="showSection('merge')">Merge Data</a></li>
+                <li><a href="#" onclick="showSection('merged-data')">Merged Data</a></li>
+                <li><a href="#" onclick="showSection('assignments')">Assignments</a></li>
+                <li><a href="#" onclick="showSection('external-pos')">External POs</a></li>
+                <li><a href="#" onclick="showSection('approvals')">Approvals</a></li>
+                <li><a href="#" onclick="showSection('users')">Users</a></li>
+            </ul>
+        </nav>
+
+        <!-- Login Section -->
+        <section id="login-section" class="section active">
+            <h2>Login</h2>
+            <form id="login-form" onsubmit="login(event)">
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="login-email" required value="admin@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Password:</label>
+                    <input type="password" id="login-password" required value="admin123">
+                </div>
+                <button type="submit">Login</button>
+            </form>
+            <div id="login-error" class="error"></div>
+            
+            <div class="info-box">
+                <h3>Default Test Accounts:</h3>
+                <ul>
+                    <li><strong>Admin:</strong> admin@example.com / admin123</li>
+                    <li><strong>PD:</strong> pd@example.com / pd123456</li>
+                    <li><strong>PM:</strong> pm@example.com / pm123456</li>
+                    <li><strong>SBC:</strong> sbc@example.com / sbc123456</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Dashboard Section -->
+        <section id="dashboard-section" class="section">
+            <h2>Dashboard</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total PO Lines</h3>
+                    <p id="stat-total-pos">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Assigned POs</h3>
+                    <p id="stat-assigned-pos">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>External POs</h3>
+                    <p id="stat-external-pos">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Pending Approvals</h3>
+                    <p id="stat-pending-approvals">0</p>
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <h3>Current User Info:</h3>
+                <div id="current-user-details"></div>
+            </div>
+        </section>
+
+        <!-- Upload Files Section -->
+        <section id="upload-section" class="section">
+            <h2>Upload Files</h2>
+            
+            <div class="upload-container">
+                <h3>Upload PO File</h3>
+                <form id="upload-po-form" onsubmit="uploadPOFile(event)">
+                    <input type="file" id="po-file" accept=".xlsx,.xls" required>
+                    <button type="submit">Upload PO File</button>
+                </form>
+                <div id="po-upload-result"></div>
+            </div>
+
+            <div class="upload-container">
+                <h3>Upload Acceptance File</h3>
+                <form id="upload-acceptance-form" onsubmit="uploadAcceptanceFile(event)">
+                    <input type="file" id="acceptance-file" accept=".xlsx,.xls" required>
+                    <button type="submit">Upload Acceptance File</button>
+                </form>
+                <div id="acceptance-upload-result"></div>
+            </div>
+
+            <div class="info-box">
+                <h3>Upload History</h3>
+                <button onclick="loadUploadHistory()">Refresh History</button>
+                <div id="upload-history"></div>
+            </div>
+        </section>
+
+        <!-- Merge Data Section -->
+        <section id="merge-section" class="section">
+            <h2>Merge Data</h2>
+            
+            <div class="merge-status" id="merge-status">
+                <h3>Merge Status</h3>
+                <button onclick="checkMergeStatus()">Check Status</button>
+                <div id="merge-status-result"></div>
+            </div>
+
+            <div class="merge-action">
+                <h3>Trigger Merge</h3>
+                <p>This will merge PO and Acceptance data.</p>
+                <button onclick="triggerMerge()" class="btn-primary">Trigger Merge</button>
+                <div id="merge-result"></div>
+            </div>
+
+            <div class="info-box">
+                <h3>Merge History</h3>
+                <button onclick="loadMergeHistory()">Refresh History</button>
+                <div id="merge-history"></div>
+            </div>
+        </section>
+
+        <!-- Merged Data Section -->
+        <section id="merged-data-section" class="section">
+            <h2>Merged Data</h2>
+            
+            <div class="filters">
+                <input type="text" id="search-merged" placeholder="Search PO number...">
+                <select id="filter-status">
+                    <option value="">All Status</option>
+                    <option value="CLOSED">CLOSED</option>
+                    <option value="Pending AC80%">Pending AC80%</option>
+                    <option value="Pending PAC20%">Pending PAC20%</option>
+                    <option value="Pending ACPAC">Pending ACPAC</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                </select>
+                <select id="filter-category">
+                    <option value="">All Categories</option>
+                    <option value="Service">Service</option>
+                    <option value="Survey">Survey</option>
+                    <option value="Transportation">Transportation</option>
+                    <option value="Site Engineer">Site Engineer</option>
+                </select>
+                <button onclick="loadMergedData()">Search</button>
+                <button onclick="exportMergedData()">Export to Excel</button>
+            </div>
+
+            <div id="merged-data-table"></div>
+            <div id="merged-data-pagination"></div>
+        </section>
+
+        <!-- Assignments Section -->
+        <section id="assignments-section" class="section">
+            <h2>PO Assignments</h2>
+            
+            <div class="assignment-create">
+                <h3>Create New Assignment</h3>
+                <form id="create-assignment-form" onsubmit="createAssignment(event)">
+                    <div class="form-group">
+                        <label>PO IDs (comma separated):</label>
+                        <input type="text" id="assignment-po-ids" placeholder="PO123-1, PO123-2" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Assign To:</label>
+                        <select id="assignment-user" required>
+                            <option value="">Select User...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Notes:</label>
+                        <textarea id="assignment-notes" rows="3"></textarea>
+                    </div>
+                    <button type="submit">Create Assignment</button>
+                </form>
+                <div id="assignment-create-result"></div>
+            </div>
+
+            <div class="assignments-list">
+                <h3>My Assignments (Assigned to Me)</h3>
+                <button onclick="loadMyAssignments()">Refresh</button>
+                <div id="my-assignments"></div>
+            </div>
+
+            <div class="assignments-list">
+                <h3>Created Assignments</h3>
+                <button onclick="loadCreatedAssignments()">Refresh</button>
+                <div id="created-assignments"></div>
+            </div>
+        </section>
+
+        <!-- External POs Section -->
+        <section id="external-pos-section" class="section">
+            <h2>External POs</h2>
+            
+            <div class="external-po-create">
+                <h3>Create External PO</h3>
+                <button onclick="loadAvailablePOLines()">Load Available PO Lines</button>
+                <form id="create-external-po-form" onsubmit="createExternalPO(event)">
+                    <div id="available-po-lines"></div>
+                    <div class="form-group">
+                        <label>Assign to SBC:</label>
+                        <select id="external-po-sbc" required>
+                            <option value="">Select SBC...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Assignment Notes:</label>
+                        <textarea id="external-po-notes" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Internal Notes:</label>
+                        <textarea id="external-po-internal-notes" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="external-po-draft" checked>
+                            Save as Draft
+                        </label>
+                    </div>
+                    <button type="submit">Create External PO</button>
+                </form>
+                <div id="external-po-create-result"></div>
+            </div>
+
+            <div class="external-pos-list">
+                <h3>My External POs</h3>
+                <button onclick="loadExternalPOs()">Refresh</button>
+                <div id="external-pos-list"></div>
+            </div>
+        </section>
+
+        <!-- Approvals Section -->
+        <section id="approvals-section" class="section">
+            <h2>Approvals</h2>
+            
+            <div class="approvals-pd">
+                <h3>PD Approvals (Level 1)</h3>
+                <button onclick="loadPDApprovals()">Refresh</button>
+                <div id="pd-approvals-list"></div>
+            </div>
+
+            <div class="approvals-admin">
+                <h3>Admin Approvals (Level 2)</h3>
+                <button onclick="loadAdminApprovals()">Refresh</button>
+                <div id="admin-approvals-list"></div>
+            </div>
+
+            <div class="approvals-sbc">
+                <h3>SBC Work</h3>
+                <button onclick="loadSBCWork()">Refresh</button>
+                <div id="sbc-work-list"></div>
+            </div>
+        </section>
+
+        <!-- Users Section -->
+        <section id="users-section" class="section">
+            <h2>User Management</h2>
+            
+            <div class="user-create">
+                <h3>Create New User</h3>
+                <form id="create-user-form" onsubmit="createUser(event)">
+                    <div class="form-group">
+                        <label>Email:</label>
+                        <input type="email" id="user-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password:</label>
+                        <input type="password" id="user-password" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm Password:</label>
+                        <input type="password" id="user-password-confirm" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Full Name:</label>
+                        <input type="text" id="user-fullname" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Role:</label>
+                        <select id="user-role" required>
+                            <option value="">Select Role...</option>
+                            <option value="ADMIN">Administrator</option>
+                            <option value="PD">Procurement Director</option>
+                            <option value="PM">Project Manager</option>
+                            <option value="COORDINATOR">Coordinator</option>
+                            <option value="PFM">Finance Manager</option>
+                            <option value="SBC">Subcontractor</option>
+                            <option value="IT">IT Support</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Phone:</label>
+                        <input type="tel" id="user-phone">
+                    </div>
+                    <div class="form-group" id="sbc-company-group" style="display: none;">
+                        <label>Company Name (SBC only):</label>
+                        <input type="text" id="user-sbc-company">
+                    </div>
+                    <button type="submit">Create User</button>
+                </form>
+                <div id="user-create-result"></div>
+            </div>
+
+            <div class="users-list">
+                <h3>All Users</h3>
+                <button onclick="loadUsers()">Refresh</button>
+                <div id="users-list"></div>
+            </div>
+        </section>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/upload.js"></script>
+    <script src="js/merge.js"></script>
+    <script src="js/merged-data.js"></script>
+    <script src="js/assignments.js"></script>
+    <script src="js/external-pos.js"></script>
+    <script src="js/approvals.js"></script>
+    <script src="js/users.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

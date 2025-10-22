@@ -81,6 +81,4 @@ class AssignmentListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'po_count', 'assigned_to_name', 'assigned_by_name',
             'status', 'created_at', 'responded_at'
-        ]', read_only=True)
-    assigned_by_email = serializers.EmailField(source='assigned_by.email', read_only=True)
-    assigned_by_name = serializers.CharField(source='assigned_by.full_name
+        ]
