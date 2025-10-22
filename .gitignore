@@ -1,0 +1,296 @@
+# ============================================================================
+# Python
+# ============================================================================
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.manifest
+*.spec
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ============================================================================
+# Virtual Environments
+# ============================================================================
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+.virtualenv/
+virtualenv/
+
+# ============================================================================
+# Django
+# ============================================================================
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static_root/
+
+# ============================================================================
+# Environment Variables
+# ============================================================================
+.env
+.env.local
+.env.*.local
+*.env
+
+# ============================================================================
+# Database
+# ============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+
+# ============================================================================
+# Django Migrations (Optional - uncomment if you want to ignore migrations)
+# ============================================================================
+# */migrations/*.py
+# */migrations/*.pyc
+# !*/migrations/__init__.py
+
+# ============================================================================
+# IDEs and Editors
+# ============================================================================
+
+# Visual Studio Code
+.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.history/
+
+# PyCharm
+.idea/
+.idea/*
+*.iml
+*.ipr
+*.iws
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries
+.idea/vcs.xml
+.idea/jsLibraryMappings.xml
+.idea/dataSources.ids
+.idea/dataSources.local.xml
+.idea/sqlDataSources.xml
+.idea/dynamic.xml
+.idea/uiDesigner.xml
+.idea/shelf/
+*.iml
+out/
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# ============================================================================
+# Operating System
+# ============================================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+.directory
+.Trash-*
+
+# ============================================================================
+# Logs
+# ============================================================================
+*.log
+logs/
+log/
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# ============================================================================
+# Temporary Files
+# ============================================================================
+tmp/
+temp/
+*.tmp
+*.temp
+.tmp/
+
+# ============================================================================
+# Uploaded Files (Keep structure, ignore content)
+# ============================================================================
+media/*
+uploads/*
+!media/.gitkeep
+!uploads/.gitkeep
+user_uploads/
+files/
+
+# ============================================================================
+# Coverage Reports
+# ============================================================================
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+nosetests.xml
+coverage/
+*.coveragerc
+
+# ============================================================================
+# Testing
+# ============================================================================
+.tox/
+.nox/
+.cache
+.pytest_cache/
+test-results/
+test_output/
+
+# ============================================================================
+# Documentation
+# ============================================================================
+docs/_build/
+site/
+_site/
+
+# ============================================================================
+# Jupyter Notebook
+# ============================================================================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ============================================================================
+# Celery
+# ============================================================================
+celerybeat-schedule
+celerybeat.pid
+
+# ============================================================================
+# Redis
+# ============================================================================
+dump.rdb
+
+# ============================================================================
+# Node (if you add frontend later)
+# ============================================================================
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# ============================================================================
+# Compiled Static Files
+# ============================================================================
+staticfiles/
+static_root/
+collected_static/
+
+# ============================================================================
+# Backup Files
+# ============================================================================
+*.bak
+*.backup
+*.old
+*.orig
+*~
+*.swp
+
+# ============================================================================
+# Docker
+# ============================================================================
+*.log
+docker-compose.override.yml
+.dockerignore
+
+# ============================================================================
+# Security & Keys
+# ============================================================================
+*.pem
+*.key
+*.cert
+*.crt
+*.pub
+secrets/
+.secrets/
+
+# ============================================================================
+# Project Specific
+# ============================================================================
+
+# Uploaded Excel files for testing
+test_uploads/
+sample_data/
+
+# Generated reports
+reports/
+exports/
+
+# Keep empty directories with .gitkeep
+!.gitkeep
+
+# Keep requirements.txt
+!requirements.txt
+
+# Keep README and documentation
+!README.md
+!*.md
+!docs/*.md
