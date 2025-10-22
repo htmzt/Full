@@ -1,7 +1,6 @@
 """
 Modified Merge Service - Uses SQL Query for FULL JOIN
 Stores results in MergedData table
-(Fixed: No emojis, corrected SQL query)
 """
 from django.db import transaction, connection
 from django.utils import timezone
@@ -52,12 +51,12 @@ class MergeService:
         try:
             # Step 1: Delete old merged data
             deleted_count, _ = MergedData.objects.filter(user=user).delete()
-            logger.info(f"Deleted {deleted_count} old records")
+            logger.info(f"🗑️  Deleted {deleted_count} old records")
             
             # Step 2: Execute SQL query to get merged data
             merged_records = MergeService._execute_merge_query(user)
             
-            logger.info(f"Query returned {len(merged_records)} records")
+            logger.info(f"📊 Query returned {len(merged_records)} records")
             
             # Step 3: Create MergedData objects from query results
             merged_data_objects = []
@@ -73,38 +72,38 @@ class MergeService:
                     po_line_no=record['po_line'],
                     
                     # Account & Project
-                    account_name=record.get('account_name'),
-                    project_name=record.get('project_name'),
+                    account_name=record['account_name'],
+                    project_name=record['project_name'],
                     
                     # Site
-                    site_code=record.get('site_code'),
+                    site_code=record['site_code'],
                     
                     # Category (calculated in query)
-                    category=record.get('category'),
+                    category=record['category'],
                     
                     # Item
-                    item_description=record.get('item_desc'),
+                    item_description=record['item_desc'],
                     
                     # Payment Terms (parsed in query)
-                    payment_terms=record.get('payment_terms'),
+                    payment_terms=record['payment_terms'],
                     
                     # Pricing
-                    unit_price=record.get('unit_price'),
-                    requested_qty=record.get('req_qty'),
-                    line_amount=record.get('line_amount'),
+                    unit_price=record['unit_price'],
+                    requested_qty=record['req_qty'],
+                    line_amount=record['line_amount'],
                     
                     # Dates
-                    publish_date=record.get('publish_date'),
-                    ac_date=record.get('ac_date'),
-                    pac_date=record.get('pac_date'),
+                    publish_date=record['publish_date'],
+                    ac_date=record['ac_date'],
+                    pac_date=record['pac_date'],
                     
                     # Calculated Amounts
-                    ac_amount=record.get('ac_amount'),
-                    pac_amount=record.get('pac_amount'),
-                    remaining=record.get('remaining'),
+                    ac_amount=record['ac_amount'],
+                    pac_amount=record['pac_amount'],
+                    remaining=record['remaining'],
                     
                     # Status (calculated in query)
-                    status=record.get('status'),
+                    status=record['status'],
                     
                     # Workflow tracking (default values)
                     is_assigned=False,
@@ -117,7 +116,7 @@ class MergeService:
             MergedData.objects.bulk_create(merged_data_objects, batch_size=1000)
             merged_count = len(merged_data_objects)
             
-            logger.info(f"Created {merged_count} merged records")
+            logger.info(f"✅ Created {merged_count} merged records")
             
             # Step 5: Create merge history
             merge_history = MergeHistory.objects.create(
@@ -141,9 +140,7 @@ class MergeService:
             }
             
         except Exception as e:
-            logger.error(f"Merge failed: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.error(f"❌ Merge failed: {str(e)}")
             
             # Record failure
             MergeHistory.objects.create(
@@ -165,7 +162,7 @@ class MergeService:
         instead of the main tables (purchase_orders and acceptances)
         """
         
-        # Modified query to use STAGING tables
+        # Modified query to use STAGING tables instead of main tables
         MERGE_QUERY = """
         SELECT 
             po.user_id,
@@ -178,10 +175,10 @@ class MergeService:
             
             -- Category calculation
             CASE
-                WHEN po.item_description ILIKE '%%Survey%%' THEN 'Survey'
-                WHEN po.item_description ILIKE '%%Transportation%%' THEN 'Transportation'
-                WHEN po.item_description ILIKE '%%Work Order%%' AND po.site_name ILIKE '%%Non DU%%' THEN 'Site Engineer'
-                WHEN po.item_description ILIKE '%%Work Order%%' THEN 'Service'
+                WHEN po.item_description ILIKE '%Survey%' THEN 'Survey'
+                WHEN po.item_description ILIKE '%Transportation%' THEN 'Transportation'
+                WHEN po.item_description ILIKE '%Work Order%' AND po.site_name ILIKE '%Non DU%' THEN 'Site Engineer'
+                WHEN po.item_description ILIKE '%Work Order%' THEN 'Service'
                 ELSE 'Service'
             END AS category,
             
@@ -189,9 +186,9 @@ class MergeService:
             
             -- Payment terms parsing
             CASE
-                WHEN po.payment_terms ILIKE '%%COD%%' THEN 'ACPAC 100%%'
-                WHEN po.payment_terms ILIKE '%%AC1%%' AND po.payment_terms ILIKE '%%AC2%%' THEN 'AC1 80 | PAC 20'
-                WHEN po.payment_terms ILIKE '%%AC1%%' THEN 'ACPAC 100%%'
+                WHEN po.payment_terms LIKE '%%COD%%' THEN 'ACPAC 100%%'
+                WHEN po.payment_terms LIKE '%%AC1%%' AND po.payment_terms LIKE '%%AC2%%' THEN 'AC1 80 | PAC 20'
+                WHEN po.payment_terms LIKE '%%AC1%%' THEN 'ACPAC 100%%'
                 ELSE ''
             END AS payment_terms,
             
@@ -200,30 +197,30 @@ class MergeService:
             po.line_amount,
             po.publish_date,
             
-            -- AC Amount (80%%)
-            ROUND(CAST(COALESCE(po.line_amount, 0) AS NUMERIC) * 0.80, 2) AS ac_amount,
+            -- AC Amount (80%)
+            ROUND(CAST(po.line_amount AS NUMERIC) * 0.80, 2) AS ac_amount,
             a.ac_date,
             
-            -- PAC Amount (20%%)
-            ROUND(CAST(COALESCE(po.line_amount, 0) AS NUMERIC) * 0.20, 2) AS pac_amount,
+            -- PAC Amount (20%)
+            ROUND(CAST(po.line_amount AS NUMERIC) * 0.20, 2) AS pac_amount,
             
             -- PAC Date logic
             CASE
-                WHEN (po.payment_terms ILIKE '%%COD%%' OR (po.payment_terms ILIKE '%%AC1%%' AND po.payment_terms NOT ILIKE '%%AC2%%')) 
+                WHEN (po.payment_terms LIKE '%%COD%%' OR (po.payment_terms LIKE '%%AC1%%' AND po.payment_terms NOT LIKE '%%AC2%%')) 
                      AND a.ac_date IS NOT NULL THEN a.ac_date
                 ELSE a.pac_date
             END AS pac_date,
             
             -- Status calculation
             CASE
-                WHEN po.payment_terms ILIKE '%%COD%%' OR (po.payment_terms ILIKE '%%AC1%%' AND po.payment_terms NOT ILIKE '%%AC2%%') THEN
+                WHEN po.payment_terms LIKE '%%COD%%' OR (po.payment_terms LIKE '%%AC1%%' AND po.payment_terms NOT LIKE '%%AC2%%') THEN
                     CASE
-                        WHEN COALESCE(po.requested_qty, 0) = 0 THEN 'CANCELLED'
+                        WHEN po.requested_qty = 0 THEN 'CANCELLED'
                         WHEN a.ac_date IS NOT NULL THEN 'CLOSED'
                         WHEN a.ac_date IS NULL THEN 'Pending ACPAC'
                         ELSE 'CLOSED'
                     END
-                WHEN po.payment_terms ILIKE '%%AC1%%' AND po.payment_terms ILIKE '%%AC2%%' THEN
+                WHEN po.payment_terms LIKE '%%AC1%%' AND po.payment_terms LIKE '%%AC2%%' THEN
                     CASE
                         WHEN po.po_status = 'CANCELLED' THEN 'CANCELLED'
                         WHEN po.po_status = 'CLOSED' THEN 'CLOSED'
@@ -236,19 +233,19 @@ class MergeService:
             
             -- Remaining amount calculation
             CASE
-                WHEN po.payment_terms ILIKE '%%COD%%' OR (po.payment_terms ILIKE '%%AC1%%' AND po.payment_terms NOT ILIKE '%%AC2%%') THEN
+                WHEN po.payment_terms LIKE '%%COD%%' OR (po.payment_terms LIKE '%%AC1%%' AND po.payment_terms NOT LIKE '%%AC2%%') THEN
                     CASE
-                        WHEN COALESCE(po.requested_qty, 0) = 0 THEN 0
+                        WHEN po.requested_qty = 0 THEN 0
                         WHEN a.ac_date IS NOT NULL THEN 0
-                        WHEN a.ac_date IS NULL THEN COALESCE(po.line_amount, 0)
+                        WHEN a.ac_date IS NULL THEN po.line_amount
                         ELSE 0
                     END
-                WHEN po.payment_terms ILIKE '%%AC1%%' AND po.payment_terms ILIKE '%%AC2%%' THEN
+                WHEN po.payment_terms LIKE '%%AC1%%' AND po.payment_terms LIKE '%%AC2%%' THEN
                     CASE
                         WHEN po.po_status = 'CANCELLED' THEN 0
                         WHEN po.po_status = 'CLOSED' THEN 0
-                        WHEN a.ac_date IS NULL THEN COALESCE(po.line_amount, 0)
-                        WHEN a.pac_date IS NULL THEN ROUND(CAST(COALESCE(po.line_amount, 0) AS NUMERIC) * 0.20, 2)
+                        WHEN a.ac_date IS NULL THEN po.line_amount
+                        WHEN a.pac_date IS NULL THEN ROUND(CAST(po.line_amount AS NUMERIC) * 0.20, 2)
                         ELSE 0
                     END
                 ELSE 0
