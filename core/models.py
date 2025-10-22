@@ -326,3 +326,171 @@ class MergeHistory(models.Model):
     
     def __str__(self):
         return f"Merge {self.batch_id} - {self.total_records} records"
+
+
+# ============================================================================
+# PERMANENT PO & ACCEPTANCE TABLES
+# ============================================================================
+
+class PurchaseOrder(models.Model):
+    """Permanent PO data storage"""
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    batch_id = models.UUIDField(db_index=True)
+    
+    # PO Identifier
+    po_number = models.CharField(max_length=100, db_index=True)
+    po_line_no = models.CharField(max_length=50)
+    
+    # Project info
+    project_name = models.CharField(max_length=255, blank=True, null=True)
+    project_code = models.CharField(max_length=100, blank=True, null=True)
+    site_name = models.CharField(max_length=255, blank=True, null=True)
+    site_code = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Item info
+    item_code = models.CharField(max_length=100, blank=True, null=True)
+    item_description = models.TextField(blank=True, null=True)
+    item_description_local = models.TextField(blank=True, null=True)
+    
+    # Pricing
+    unit_price = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
+    requested_qty = models.IntegerField(null=True, blank=True)
+    due_qty = models.IntegerField(null=True, blank=True)
+    billed_qty = models.IntegerField(null=True, blank=True)
+    quantity_cancel = models.IntegerField(null=True, blank=True)
+    line_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    unit = models.CharField(max_length=50, blank=True, null=True)
+    currency = models.CharField(max_length=10, blank=True, null=True)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    
+    # Status & terms
+    po_status = models.CharField(max_length=50, blank=True, null=True)
+    payment_terms = models.CharField(max_length=255, blank=True, null=True)
+    payment_method = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Additional info
+    customer = models.CharField(max_length=255, blank=True, null=True)
+    rep_office = models.CharField(max_length=255, blank=True, null=True)
+    subcontract_no = models.CharField(max_length=100, blank=True, null=True)
+    pr_no = models.CharField(max_length=100, blank=True, null=True)
+    sales_contract_no = models.CharField(max_length=100, blank=True, null=True)
+    version_no = models.CharField(max_length=50, blank=True, null=True)
+    shipment_no = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Engineering
+    engineering_code = models.CharField(max_length=100, blank=True, null=True)
+    engineering_name = models.CharField(max_length=255, blank=True, null=True)
+    subproject_code = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Categories
+    category = models.CharField(max_length=255, blank=True, null=True)
+    center_area = models.CharField(max_length=255, blank=True, null=True)
+    product_category = models.CharField(max_length=255, blank=True, null=True)
+    bidding_area = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Text fields
+    bill_to = models.TextField(blank=True, null=True)
+    ship_to = models.TextField(blank=True, null=True)
+    note_to_receiver = models.TextField(blank=True, null=True)
+    ff_buyer = models.CharField(max_length=255, blank=True, null=True)
+    fob_lookup_code = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Dates
+    publish_date = models.DateField(null=True, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    expire_date = models.DateField(null=True, blank=True)
+    acceptance_date = models.DateField(null=True, blank=True)
+    acceptance_date_1 = models.DateField(null=True, blank=True)
+    
+    # Additional
+    change_history = models.TextField(blank=True, null=True)
+    pr_po_automation = models.TextField(blank=True, null=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'purchase_orders'
+        unique_together = [['user', 'po_number', 'po_line_no', 'batch_id']]
+        indexes = [
+            models.Index(fields=['user', 'batch_id'], name='idx_po_user_batch'),
+            models.Index(fields=['user', 'po_number', 'po_line_no'], name='idx_po_lookup'),
+        ]
+    
+    def __str__(self):
+        return f"PO {self.po_number}-{self.po_line_no}"
+
+
+class Acceptance(models.Model):
+    """Permanent Acceptance data storage"""
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    batch_id = models.UUIDField(db_index=True)
+    
+    # Acceptance identifiers
+    acceptance_no = models.CharField(max_length=100)
+    po_number = models.CharField(max_length=100, db_index=True)
+    po_line_no = models.CharField(max_length=50)
+    shipment_no = models.CharField(max_length=100, blank=True, null=True)
+    milestone_type = models.CharField(max_length=50, blank=True, null=True)  # AC1 or AC2
+    
+    # Project info
+    project_code = models.CharField(max_length=100, blank=True, null=True)
+    site_name = models.CharField(max_length=255, blank=True, null=True)
+    site_code = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Description
+    acceptance_description = models.TextField(blank=True, null=True)
+    
+    # Financial
+    unit = models.CharField(max_length=50, blank=True, null=True)
+    currency = models.CharField(max_length=10, blank=True, null=True)
+    bill_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    tax_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    accepted_qty = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    
+    # Area
+    center_area = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Dates
+    planned_completion_date = models.DateField(null=True, blank=True)
+    actual_completion_date = models.DateField(null=True, blank=True)
+    application_submitted = models.DateField(null=True, blank=True)
+    application_processed = models.DateField(null=True, blank=True)
+    
+    # Approval
+    approver = models.CharField(max_length=255, blank=True, null=True)
+    current_handler = models.TextField(blank=True, null=True)
+    approval_progress = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Project type
+    isdp_project = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Notes
+    header_remarks = models.TextField(blank=True, null=True)
+    remarks = models.TextField(blank=True, null=True)
+    
+    # Additional
+    service_code = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
+    payment_percentage = models.CharField(max_length=50, blank=True, null=True)
+    record_status = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'acceptances'
+        unique_together = [['user', 'acceptance_no', 'po_number', 'po_line_no', 'batch_id']]
+        indexes = [
+            models.Index(fields=['user', 'batch_id'], name='idx_acc_user_batch'),
+            models.Index(fields=['user', 'po_number', 'po_line_no'], name='idx_acc_lookup'),
+        ]
+    
+    def __str__(self):
+        return f"Acceptance {self.acceptance_no}"

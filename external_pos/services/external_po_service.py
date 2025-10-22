@@ -8,6 +8,7 @@ from core.models import MergedData
 from accounts.models import User
 from decimal import Decimal
 import logging
+from django.db import models
 
 logger = logging.getLogger(__name__)
 

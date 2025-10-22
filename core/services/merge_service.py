@@ -4,6 +4,7 @@ Merge Service - Merge PO and Acceptance data
 from django.db import transaction
 from django.utils import timezone
 from core.models import POStaging, AcceptanceStaging, MergedData, MergeHistory
+from decimal import Decimal
 import uuid
 import logging
 
@@ -97,12 +98,13 @@ class MergeService:
                     elif 'ac1' in pt:
                         payment_terms = 'ACPAC 100%'
                 
-                # Calculate amounts
+                # Calculate amounts - USE DECIMAL!
                 ac_amount = None
                 pac_amount = None
                 if po.line_amount:
-                    ac_amount = round(po.line_amount * 0.80, 2)
-                    pac_amount = round(po.line_amount * 0.20, 2)
+                    # Convert to Decimal for proper calculation
+                    ac_amount = round(po.line_amount * Decimal('0.80'), 2)
+                    pac_amount = round(po.line_amount * Decimal('0.20'), 2)
                 
                 # Calculate status
                 ac_date = acc_data.get('ac_date')
@@ -130,24 +132,24 @@ class MergeService:
                     status = 'Unknown'
                 
                 # Calculate remaining
-                remaining = 0
+                remaining = Decimal('0')
                 if po.line_amount:
                     if 'cod' in (po.payment_terms or '').lower() or ('ac1' in (po.payment_terms or '').lower() and 'ac2' not in (po.payment_terms or '').lower()):
                         if po.requested_qty == 0:
-                            remaining = 0
+                            remaining = Decimal('0')
                         elif ac_date:
-                            remaining = 0
+                            remaining = Decimal('0')
                         else:
                             remaining = po.line_amount
                     elif 'ac1' in (po.payment_terms or '').lower() and 'ac2' in (po.payment_terms or '').lower():
                         if po.po_status in ['CANCELLED', 'CLOSED']:
-                            remaining = 0
+                            remaining = Decimal('0')
                         elif not ac_date:
                             remaining = po.line_amount
                         elif not pac_date:
-                            remaining = pac_amount or 0
+                            remaining = pac_amount or Decimal('0')
                         else:
-                            remaining = 0
+                            remaining = Decimal('0')
                 
                 # Create merged data record
                 merged_record = MergedData(
@@ -173,9 +175,9 @@ class MergeService:
                     pac_date=pac_date,
                     ac_amount=ac_amount,
                     pac_amount=pac_amount,
+                    remaining=remaining,
                     status=status,
                     po_status=po.po_status,
-                    remaining=remaining,
                     is_assigned=False,
                     has_external_po=False,
                     batch_id=batch_id
@@ -200,6 +202,8 @@ class MergeService:
                 completed_at=timezone.now()
             )
             
+            logger.info(f"[MERGE] Merge completed successfully: {merged_count} records")
+            
             return {
                 'success': True,
                 'batch_id': str(batch_id),
@@ -210,7 +214,7 @@ class MergeService:
             }
             
         except Exception as e:
-            logger.error(f"Merge failed: {str(e)}")
+            logger.error(f"Merge failed: {str(e)}", exc_info=True)
             
             # Record failure
             MergeHistory.objects.create(
