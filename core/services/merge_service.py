@@ -1,6 +1,6 @@
 """
-Modified Merge Service - Uses SQL Query for FULL JOIN
-Stores results in MergedData table
+Modified Merge Service - Company-Wide Data (No User Filtering)
+Uses SQL Query for FULL JOIN, stores results in MergedData table
 """
 from django.db import transaction, connection
 from django.utils import timezone
@@ -12,13 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 class MergeService:
-    """Service for merging PO and Acceptance staging data using SQL query"""
+    """Service for merging PO and Acceptance staging data - COMPANY-WIDE"""
     
     @staticmethod
-    def check_staging_data(user):
-        """Check if both staging tables have data"""
-        po_count = POStaging.objects.filter(user=user).count()
-        acceptance_count = AcceptanceStaging.objects.filter(user=user).count()
+    def check_staging_data():
+        """Check if both staging tables have data - COMPANY-WIDE"""
+        po_count = POStaging.objects.count()
+        acceptance_count = AcceptanceStaging.objects.count()
         
         return {
             'has_po_data': po_count > 0,
@@ -32,28 +32,31 @@ class MergeService:
     @transaction.atomic
     def trigger_merge(user):
         """
-        Trigger merge operation using SQL query
+        Trigger merge operation - COMPANY-WIDE DATA
         
-        This performs the merge using the provided SQL query and stores
-        results in the MergedData table
+        Args:
+            user: User who triggered the merge (for tracking only)
+        
+        Returns:
+            dict with merge results
         """
-        logger.info(f"Starting merge for user: {user.email}")
+        logger.info(f"Starting COMPANY-WIDE merge triggered by: {user.email}")
         
-        # Check staging data
-        status_check = MergeService.check_staging_data(user)
+        # Check staging data (NO user filtering)
+        status_check = MergeService.check_staging_data()
         if not status_check['ready_to_merge']:
             raise ValueError("Both PO and Acceptance data must be uploaded first")
         
         batch_id = uuid.uuid4()
         
         try:
-            # Step 1: Delete old merged data (NO USER FIELD)
+            # Step 1: Delete ALL old merged data (company-wide replacement)
             deleted_count, _ = MergedData.objects.all().delete()
-            logger.info(f"Deleted {deleted_count} old records")
+            logger.info(f"Deleted {deleted_count} old records (company-wide)")
             
             # Step 2: Execute SQL query to get merged data
             try:
-                merged_records = MergeService._execute_merge_query(user)
+                merged_records = MergeService._execute_merge_query()
                 logger.info(f"Query returned {len(merged_records)} records")
             except Exception as query_error:
                 logger.error(f"Query execution failed: {str(query_error)}", exc_info=True)
@@ -107,7 +110,7 @@ class MergeService:
             MergedData.objects.bulk_create(merged_data_objects, batch_size=1000)
             merged_count = len(merged_data_objects)
             
-            logger.info(f"Created {merged_count} merged records")
+            logger.info(f"Created {merged_count} merged records (company-wide)")
             
             # Step 5: Create merge history
             merge_history = MergeHistory.objects.create(
@@ -117,7 +120,7 @@ class MergeService:
                 po_records_count=status_check['po_count'],
                 acceptance_records_count=status_check['acceptance_count'],
                 status=MergeHistory.Status.COMPLETED,
-                notes=f"SQL-based merge triggered by {user.full_name}",
+                notes=f"Company-wide merge triggered by {user.full_name}",
                 completed_at=timezone.now()
             )
             
@@ -145,9 +148,12 @@ class MergeService:
             raise ValueError(f"Merge failed: {str(e)}")
     
     @staticmethod
-    def _execute_merge_query(user):
+    def _execute_merge_query():
         """
-        Execute the SQL merge query and return results as list of dictionaries
+        Execute the SQL merge query - COMPANY-WIDE (NO USER FILTERING)
+        
+        Returns:
+            list of dict with merged data
         """
         
         MERGE_QUERY = """
@@ -240,30 +246,27 @@ class MergeService:
         
         LEFT JOIN (
             SELECT 
-                user_id,
                 po_number,
                 po_line_no,
                 MIN(CASE WHEN milestone_type = 'AC1' THEN application_processed END) AS ac_date,
                 MIN(CASE WHEN milestone_type = 'AC2' THEN application_processed END) AS pac_date
             FROM acceptance_staging
-            WHERE user_id = %s
-            GROUP BY user_id, po_number, po_line_no
-        ) a ON po.user_id = a.user_id 
-           AND po.po_number = a.po_number 
+            GROUP BY po_number, po_line_no
+        ) a ON po.po_number = a.po_number 
            AND po.po_line_no = a.po_line_no
         
-        WHERE po.user_id = %s AND po.is_valid = TRUE
+        WHERE po.is_valid = TRUE
         
         ORDER BY po.po_number, po.po_line_no
         """
         
+        # CRITICAL: COLUMN MAPPING NOT CHANGED - Same parameters as before
         params = [
             '%Survey%', '%Transportation%', '%Work Order%', '%Non DU%', '%Work Order%',
             '%COD%', '%AC1%', '%AC2%', '%AC1%',
             '%COD%', '%AC1%', '%AC2%',
             '%COD%', '%AC1%', '%AC2%', '%AC1%', '%AC2%',
             '%COD%', '%AC1%', '%AC2%', '%AC1%', '%AC2%',
-            user.id, user.id,
         ]
         
         try:
@@ -272,7 +275,7 @@ class MergeService:
                 columns = [col[0] for col in cursor.description]
                 results = [dict(zip(columns, row)) for row in cursor.fetchall()]
             
-            logger.info(f"Query executed successfully. Returned {len(results)} records")
+            logger.info(f"Query executed successfully. Returned {len(results)} records (company-wide)")
             return results
             
         except Exception as e:
@@ -281,7 +284,5 @@ class MergeService:
     
     @staticmethod
     def get_merge_history(user, limit=10):
-        """Get merge history for user"""
-        return MergeHistory.objects.filter(
-            merged_by=user
-        ).order_by('-merged_at')[:limit]
+        """Get merge history - all merges (company-wide)"""
+        return MergeHistory.objects.order_by('-merged_at')[:limit]
