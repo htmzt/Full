@@ -492,13 +492,12 @@ class Acceptance(models.Model):
     def __str__(self):
         return f"Acceptance {self.acceptance_no}"
 
-class Account(Base):
-    __tablename__ = "accounts"
+class Account(models.Model):
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    account_name = Column(String(255), nullable=False)
-    project_name = Column(String(255))
-    needs_review = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now()) 
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now()) 
-    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    account_name = models.CharField(max_length=100)
+    project_name = models.CharField(max_length=100)
+    needs_review = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
