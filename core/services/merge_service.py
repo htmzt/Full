@@ -4,21 +4,20 @@ Uses SQL Query for FULL JOIN, stores results in MergedData table
 """
 from django.db import transaction, connection
 from django.utils import timezone
-from core.models import POStaging, AcceptanceStaging, MergedData, MergeHistory
+from core.models import PurchaseOrder, Acceptance, MergedData, MergeHistory
 import uuid
 import logging
 
 logger = logging.getLogger(__name__)
 
-
 class MergeService:
-    """Service for merging PO and Acceptance staging data - COMPANY-WIDE"""
+    """Service for merging PO and Acceptance data - COMPANY-WIDE"""
     
     @staticmethod
     def check_staging_data():
-        """Check if both staging tables have data - COMPANY-WIDE"""
-        po_count = POStaging.objects.count()
-        acceptance_count = AcceptanceStaging.objects.count()
+        """Check if both permanent tables have data - COMPANY-WIDE"""
+        po_count = PurchaseOrder.objects.count()
+        acceptance_count = Acceptance.objects.count()
         
         return {
             'has_po_data': po_count > 0,
@@ -42,7 +41,7 @@ class MergeService:
         """
         logger.info(f"Starting COMPANY-WIDE merge triggered by: {user.email}")
         
-        # Check staging data (NO user filtering)
+        # Check data (NO user filtering)
         status_check = MergeService.check_staging_data()
         if not status_check['ready_to_merge']:
             raise ValueError("Both PO and Acceptance data must be uploaded first")
@@ -63,7 +62,7 @@ class MergeService:
                 raise ValueError(f"Query execution failed: {str(query_error)}")
             
             if not merged_records:
-                raise ValueError("No records returned from merge query. Check if staging data is valid.")
+                raise ValueError("No records returned from merge query. Check if data is valid.")
             
             # Step 3: Create MergedData objects from query results
             merged_data_objects = []
@@ -242,7 +241,7 @@ class MergeService:
                 ELSE 0
             END AS remaining
             
-        FROM po_staging po
+        FROM purchase_orders po
         
         LEFT JOIN (
             SELECT 
@@ -250,12 +249,10 @@ class MergeService:
                 po_line_no,
                 MIN(CASE WHEN milestone_type = 'AC1' THEN application_processed END) AS ac_date,
                 MIN(CASE WHEN milestone_type = 'AC2' THEN application_processed END) AS pac_date
-            FROM acceptance_staging
+            FROM acceptances
             GROUP BY po_number, po_line_no
         ) a ON po.po_number = a.po_number 
            AND po.po_line_no = a.po_line_no
-        
-        WHERE po.is_valid = TRUE
         
         ORDER BY po.po_number, po.po_line_no
         """

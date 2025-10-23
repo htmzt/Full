@@ -403,7 +403,6 @@ class Acceptance(models.Model):
     class Meta:
         db_table = 'acceptances'
         # Unique constraint with shipment_no included
-        unique_together = [['acceptance_no', 'po_number', 'po_line_no', 'shipment_no', 'batch_id']]
         indexes = [
             models.Index(fields=['batch_id'], name='idx_acc_batch'),
             models.Index(fields=['po_number', 'po_line_no'], name='idx_acc_po_lookup'),

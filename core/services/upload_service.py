@@ -1,6 +1,3 @@
-"""
-Upload Service - Handle file uploads and processing (COMPANY-WIDE)
-"""
 import pandas as pd
 import uuid
 import logging
@@ -19,22 +16,9 @@ from core.models import (
 
 logger = logging.getLogger(__name__)
 
-
 class UploadService:
-    """Service for handling file uploads"""
-    
     @staticmethod
     def upload_po_file(file, user):
-        """
-        Upload and process PO file
-        
-        Args:
-            file: Uploaded file object
-            user: User who uploaded (for tracking only)
-            
-        Returns:
-            dict with upload results
-        """
         batch_id = uuid.uuid4()
         
         # Save file temporarily
@@ -53,8 +37,6 @@ class UploadService:
         
         try:
             start_time = timezone.now()
-            
-            # Process file
             processor = POProcessor(batch_id)
             processor.process_file(file_path)
             
@@ -100,16 +82,6 @@ class UploadService:
     
     @staticmethod
     def upload_acceptance_file(file, user):
-        """
-        Upload and process Acceptance file
-        
-        Args:
-            file: Uploaded file object
-            user: User who uploaded (for tracking only)
-            
-        Returns:
-            dict with upload results
-        """
         batch_id = uuid.uuid4()
         
         # Save file temporarily
@@ -172,7 +144,6 @@ class UploadService:
                 pass
             
             raise ValueError(f"Upload failed: {str(e)}")
-
 
 class BaseProcessor:
     """Base processor for file uploads"""
@@ -262,10 +233,7 @@ class BaseProcessor:
         """Process uploaded file"""
         raise NotImplementedError("Must be implemented by subclass")
 
-
 class POProcessor(BaseProcessor):
-    """PO Upload Processor"""
-    
     def __init__(self, batch_id):
         super().__init__(batch_id)
         self.staging_model = POStaging
@@ -576,7 +544,13 @@ class AcceptanceProcessor(BaseProcessor):
                 'field': 'po_line_no',
                 'error': 'PO Line Number is required'
             })
-        
+                
+        if not record.get('shipment_no'):
+            errors.append({
+                'row': row_num,
+                'field': 'shipment_no',
+                'error': 'shipment no is required'
+            })
         return errors
     
     @transaction.atomic
@@ -611,9 +585,6 @@ class AcceptanceProcessor(BaseProcessor):
         # Process rows
         staging_records = []
         permanent_records = []
-        
-        # Track unique keys to avoid duplicates within the same file
-        seen_keys = set()
         
         for idx, row in df_mapped.iterrows():
             try:
@@ -680,26 +651,13 @@ class AcceptanceProcessor(BaseProcessor):
                 )
                 staging_records.append(staging_record)
                 
-                # Create permanent record (only if valid and not duplicate)
-                if is_valid and record_data.get('acceptance_no') and record_data.get('po_number') and record_data.get('po_line_no'):
-                    # Create unique key to check for duplicates within the file
-                    unique_key = (
-                        record_data['acceptance_no'],
-                        record_data['po_number'],
-                        record_data['po_line_no'],
-                        record_data.get('shipment_no') or 'NULL'
+                # Create permanent record (only if valid)
+                if is_valid and record_data.get('acceptance_no') and record_data.get('po_number') and record_data.get('po_line_no') and record_data.get('shipment_no'):
+                    permanent_record = Acceptance(
+                        batch_id=self.batch_id,
+                        **record_data
                     )
-                    
-                    if unique_key not in seen_keys:
-                        seen_keys.add(unique_key)
-                        
-                        permanent_record = Acceptance(
-                            batch_id=self.batch_id,
-                            **record_data
-                        )
-                        permanent_records.append(permanent_record)
-                    else:
-                        logger.warning(f"Duplicate record skipped in file at row {idx + 2}: {unique_key}")
+                    permanent_records.append(permanent_record)
                 
             except Exception as e:
                 logger.error(f"Error processing row {idx + 2}: {str(e)}")
@@ -709,10 +667,10 @@ class AcceptanceProcessor(BaseProcessor):
         AcceptanceStaging.objects.bulk_create(staging_records, batch_size=1000)
         logger.info(f"Created {len(staging_records)} Acceptance staging records")
         
-        # Bulk create permanent records (fresh data only)
+        # Bulk create permanent records (all valid records, including duplicates)
         from core.models import Acceptance
         if permanent_records:
             Acceptance.objects.bulk_create(permanent_records, batch_size=1000)
-            logger.info(f"Inserted {len(permanent_records)} new Acceptance records (full replacement)")
+            logger.info(f"Inserted {len(permanent_records)} new Acceptance records (full replacement, including duplicates)")
         else:
             logger.warning("No valid Acceptance records to insert")
