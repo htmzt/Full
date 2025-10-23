@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import POStaging, AcceptanceStaging, MergedData, UploadHistory, MergeHistory,PurchaseOrder, Acceptance
+from .models import POStaging, AcceptanceStaging, MergedData, UploadHistory, MergeHistory, PurchaseOrder, Acceptance
 
 
 @admin.register(MergedData)
@@ -31,32 +31,35 @@ class MergeHistoryAdmin(admin.ModelAdmin):
 
 @admin.register(POStaging)
 class POStagingAdmin(admin.ModelAdmin):
-    list_display = ['po_number', 'po_line_no', 'project_name', 'line_amount', 'batch_id', 'created_at']
+    list_display = ['po_number', 'po_line_no', 'batch_id', 'is_valid', 'is_processed', 'created_at']
     list_filter = ['is_processed', 'is_valid', 'created_at']
-    search_fields = ['po_number', 'po_line_no', 'project_name']
+    search_fields = ['po_number', 'po_line_no']
     date_hierarchy = 'created_at'
+    readonly_fields = ['batch_id', 'created_at']
 
 
 @admin.register(AcceptanceStaging)
 class AcceptanceStagingAdmin(admin.ModelAdmin):
-    list_display = ['acceptance_no', 'po_number', 'po_line_no', 'milestone_type', 'batch_id', 'created_at']
-    list_filter = ['milestone_type', 'is_processed', 'is_valid', 'created_at']
+    list_display = ['acceptance_no', 'po_number', 'po_line_no', 'batch_id', 'is_valid', 'is_processed', 'created_at']
+    list_filter = ['is_processed', 'is_valid', 'created_at']
     search_fields = ['acceptance_no', 'po_number', 'po_line_no']
     date_hierarchy = 'created_at'
+    readonly_fields = ['batch_id', 'created_at']
+
 
 @admin.register(PurchaseOrder)
 class PurchaseOrderAdmin(admin.ModelAdmin):
-    list_display = ['po_number', 'po_line_no', 'project_name', 'line_amount', 'po_status', 'created_at']
-    list_filter = ['po_status', 'category', 'created_at']
-    search_fields = ['po_number', 'po_line_no', 'project_name', 'item_description']
+    list_display = ['po_number', 'po_line_no', 'batch_id', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['po_number', 'po_line_no']
     date_hierarchy = 'created_at'
     readonly_fields = ['id', 'batch_id', 'created_at', 'updated_at']
 
 
 @admin.register(Acceptance)
 class AcceptanceAdmin(admin.ModelAdmin):
-    list_display = ['acceptance_no', 'po_number', 'po_line_no', 'milestone_type', 'bill_amount', 'created_at']
-    list_filter = ['milestone_type', 'record_status', 'created_at']
+    list_display = ['acceptance_no', 'po_number', 'po_line_no', 'batch_id', 'created_at']
+    list_filter = ['created_at']
     search_fields = ['acceptance_no', 'po_number', 'po_line_no']
     date_hierarchy = 'created_at'
     readonly_fields = ['id', 'batch_id', 'created_at', 'updated_at']
