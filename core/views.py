@@ -133,21 +133,25 @@ class MergedDataListView(generics.ListAPIView):
         """Filter queryset based on user role"""
         user = self.request.user
         
-        # Admin and PD can see all
-        if user.can_view_all_pos:
-            return MergedData.objects.filter(user=user)
+        # MergedData doesn't have a user field, so everyone sees all data
+        # Filter by role-specific permissions
+        queryset = MergedData.objects.all()
         
-        # PM can only see assigned POs
-        elif user.role == 'PM':
-            return MergedData.objects.filter(
-                user=user,
+        # If user is PM, only show assigned POs
+        if user.role == 'PM' and not user.can_view_all_pos:
+            queryset = queryset.filter(
                 is_assigned=True,
                 assigned_to=user
             )
         
-        # Others can see all (read-only)
-        else:
-            return MergedData.objects.filter(user=user)
+        # If user is SBC, only show their assigned work
+        elif user.role == 'SBC':
+            queryset = queryset.filter(
+                is_assigned=True,
+                assigned_to=user
+            )
+        
+        return queryset
 
 
 class MergedDataExportView(APIView):
@@ -158,17 +162,19 @@ class MergedDataExportView(APIView):
         """Export to Excel"""
         user = request.user
         
-        # Get filtered queryset
-        if user.can_view_all_pos:
-            queryset = MergedData.objects.filter(user=user)
-        elif user.role == 'PM':
+        # Get filtered queryset based on role
+        if user.role == 'PM' and not user.can_view_all_pos:
             queryset = MergedData.objects.filter(
-                user=user,
+                is_assigned=True,
+                assigned_to=user
+            )
+        elif user.role == 'SBC':
+            queryset = MergedData.objects.filter(
                 is_assigned=True,
                 assigned_to=user
             )
         else:
-            queryset = MergedData.objects.filter(user=user)
+            queryset = MergedData.objects.all()
         
         # Apply filters from query params
         status_filter = request.query_params.get('status')

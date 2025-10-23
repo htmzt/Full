@@ -7,8 +7,6 @@ from django.utils import timezone
 from core.models import POStaging, AcceptanceStaging, MergedData, MergeHistory
 import uuid
 import logging
-from decimal import Decimal
-from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -49,74 +47,67 @@ class MergeService:
         batch_id = uuid.uuid4()
         
         try:
-            # Step 1: Delete old merged data
-            deleted_count, _ = MergedData.objects.filter(user=user).delete()
-            logger.info(f"🗑️  Deleted {deleted_count} old records")
+            # Step 1: Delete old merged data (NO USER FIELD)
+            deleted_count, _ = MergedData.objects.all().delete()
+            logger.info(f"Deleted {deleted_count} old records")
             
             # Step 2: Execute SQL query to get merged data
-            merged_records = MergeService._execute_merge_query(user)
+            try:
+                merged_records = MergeService._execute_merge_query(user)
+                logger.info(f"Query returned {len(merged_records)} records")
+            except Exception as query_error:
+                logger.error(f"Query execution failed: {str(query_error)}", exc_info=True)
+                raise ValueError(f"Query execution failed: {str(query_error)}")
             
-            logger.info(f"📊 Query returned {len(merged_records)} records")
+            if not merged_records:
+                raise ValueError("No records returned from merge query. Check if staging data is valid.")
             
             # Step 3: Create MergedData objects from query results
             merged_data_objects = []
             
-            for record in merged_records:
-                merged_data = MergedData(
-                    user=user,
-                    batch_id=batch_id,
-                    
-                    # PO Identification
-                    po_id=record['po_id'],
-                    po_number=record['po_no'],
-                    po_line_no=record['po_line'],
-                    
-                    # Account & Project
-                    account_name=record['account_name'],
-                    project_name=record['project_name'],
-                    
-                    # Site
-                    site_code=record['site_code'],
-                    
-                    # Category (calculated in query)
-                    category=record['category'],
-                    
-                    # Item
-                    item_description=record['item_desc'],
-                    
-                    # Payment Terms (parsed in query)
-                    payment_terms=record['payment_terms'],
-                    
-                    # Pricing
-                    unit_price=record['unit_price'],
-                    requested_qty=record['req_qty'],
-                    line_amount=record['line_amount'],
-                    
-                    # Dates
-                    publish_date=record['publish_date'],
-                    ac_date=record['ac_date'],
-                    pac_date=record['pac_date'],
-                    
-                    # Calculated Amounts
-                    ac_amount=record['ac_amount'],
-                    pac_amount=record['pac_amount'],
-                    remaining=record['remaining'],
-                    
-                    # Status (calculated in query)
-                    status=record['status'],
-                    
-                    # Workflow tracking (default values)
-                    is_assigned=False,
-                    has_external_po=False,
-                )
-                
-                merged_data_objects.append(merged_data)
+            for idx, record in enumerate(merged_records):
+                try:
+                    merged_data = MergedData(
+                        batch_id=batch_id,
+                        po_id=record.get('po_id', ''),
+                        po_number=record.get('po_no', ''),
+                        po_line_no=record.get('po_line', ''),
+                        account_name=record.get('account_name'),
+                        project_name=record.get('project_name'),
+                        project_code=record.get('project_code'),
+                        site_code=record.get('site_code'),
+                        site_name=record.get('site_name'),
+                        category=record.get('category'),
+                        item_description=record.get('item_desc'),
+                        item_code=record.get('item_code'),
+                        payment_terms=record.get('payment_terms'),
+                        unit_price=record.get('unit_price'),
+                        requested_qty=record.get('req_qty'),
+                        line_amount=record.get('line_amount'),
+                        unit=record.get('unit'),
+                        currency=record.get('currency'),
+                        publish_date=record.get('publish_date'),
+                        ac_date=record.get('ac_date'),
+                        pac_date=record.get('pac_date'),
+                        ac_amount=record.get('ac_amount'),
+                        pac_amount=record.get('pac_amount'),
+                        remaining=record.get('remaining'),
+                        status=record.get('status'),
+                        po_status=record.get('po_status'),
+                        is_assigned=False,
+                        has_external_po=False,
+                    )
+                    merged_data_objects.append(merged_data)
+                except Exception as record_error:
+                    logger.error(f"Failed to create MergedData object for record {idx}: {str(record_error)}")
+                    logger.error(f"Record data: {record}")
+                    continue
             
             # Step 4: Bulk create
             MergedData.objects.bulk_create(merged_data_objects, batch_size=1000)
             merged_count = len(merged_data_objects)
             
-            logger.info(f"✅ Created {merged_count} merged records")
+            logger.info(f"Created {merged_count} merged records")
             
             # Step 5: Create merge history
             merge_history = MergeHistory.objects.create(
@@ -140,7 +131,7 @@ class MergeService:
             }
             
         except Exception as e:
-            logger.error(f"❌ Merge failed: {str(e)}")
+            logger.error(f"Merge failed: {str(e)}", exc_info=True)
             
             # Record failure
             MergeHistory.objects.create(
@@ -151,45 +142,44 @@ class MergeService:
                 error_message=str(e)
             )
             
-            raise
+            raise ValueError(f"Merge failed: {str(e)}")
     
     @staticmethod
     def _execute_merge_query(user):
         """
         Execute the SQL merge query and return results as list of dictionaries
-        
-        This uses the staging tables (po_staging and acceptance_staging)
-        instead of the main tables (purchase_orders and acceptances)
         """
         
-        # Modified query to use STAGING tables instead of main tables
         MERGE_QUERY = """
         SELECT 
-            po.user_id,
             CONCAT(po.po_number, '-', po.po_line_no) AS po_id,
-            acc.account_name,
+            po.project_name AS account_name,
             po.project_name,
+            po.project_code,
             po.site_code,
+            po.site_name,
             po.po_number AS po_no,
             po.po_line_no AS po_line,
+            po.item_code,
+            po.unit,
+            po.currency,
+            po.po_status,
             
-            -- Category calculation
             CASE
-                WHEN po.item_description ILIKE '%Survey%' THEN 'Survey'
-                WHEN po.item_description ILIKE '%Transportation%' THEN 'Transportation'
-                WHEN po.item_description ILIKE '%Work Order%' AND po.site_name ILIKE '%Non DU%' THEN 'Site Engineer'
-                WHEN po.item_description ILIKE '%Work Order%' THEN 'Service'
+                WHEN po.item_description ILIKE %s THEN 'Survey'
+                WHEN po.item_description ILIKE %s THEN 'Transportation'
+                WHEN po.item_description ILIKE %s AND po.site_name ILIKE %s THEN 'Site Engineer'
+                WHEN po.item_description ILIKE %s THEN 'Service'
                 ELSE 'Service'
             END AS category,
             
             po.item_description AS item_desc,
             
-            -- Payment terms parsing
             CASE
-                WHEN po.payment_terms LIKE '%%COD%%' THEN 'ACPAC 100%%'
-                WHEN po.payment_terms LIKE '%%AC1%%' AND po.payment_terms LIKE '%%AC2%%' THEN 'AC1 80 | PAC 20'
-                WHEN po.payment_terms LIKE '%%AC1%%' THEN 'ACPAC 100%%'
-                ELSE ''
+                WHEN po.payment_terms LIKE %s THEN 'ACPAC 100%%'
+                WHEN po.payment_terms LIKE %s AND po.payment_terms LIKE %s THEN 'AC1 80 | PAC 20'
+                WHEN po.payment_terms LIKE %s THEN 'ACPAC 100%%'
+                ELSE COALESCE(po.payment_terms, '')
             END AS payment_terms,
             
             po.unit_price,
@@ -197,30 +187,26 @@ class MergeService:
             po.line_amount,
             po.publish_date,
             
-            -- AC Amount (80%)
-            ROUND(CAST(po.line_amount AS NUMERIC) * 0.80, 2) AS ac_amount,
+            ROUND(CAST(COALESCE(po.line_amount, 0) AS NUMERIC) * 0.80, 2) AS ac_amount,
             a.ac_date,
             
-            -- PAC Amount (20%)
-            ROUND(CAST(po.line_amount AS NUMERIC) * 0.20, 2) AS pac_amount,
+            ROUND(CAST(COALESCE(po.line_amount, 0) AS NUMERIC) * 0.20, 2) AS pac_amount,
             
-            -- PAC Date logic
             CASE
-                WHEN (po.payment_terms LIKE '%%COD%%' OR (po.payment_terms LIKE '%%AC1%%' AND po.payment_terms NOT LIKE '%%AC2%%')) 
+                WHEN (po.payment_terms LIKE %s OR (po.payment_terms LIKE %s AND po.payment_terms NOT LIKE %s)) 
                      AND a.ac_date IS NOT NULL THEN a.ac_date
                 ELSE a.pac_date
             END AS pac_date,
             
-            -- Status calculation
             CASE
-                WHEN po.payment_terms LIKE '%%COD%%' OR (po.payment_terms LIKE '%%AC1%%' AND po.payment_terms NOT LIKE '%%AC2%%') THEN
+                WHEN po.payment_terms LIKE %s OR (po.payment_terms LIKE %s AND po.payment_terms NOT LIKE %s) THEN
                     CASE
-                        WHEN po.requested_qty = 0 THEN 'CANCELLED'
+                        WHEN COALESCE(po.requested_qty, 0) = 0 THEN 'CANCELLED'
                         WHEN a.ac_date IS NOT NULL THEN 'CLOSED'
                         WHEN a.ac_date IS NULL THEN 'Pending ACPAC'
                         ELSE 'CLOSED'
                     END
-                WHEN po.payment_terms LIKE '%%AC1%%' AND po.payment_terms LIKE '%%AC2%%' THEN
+                WHEN po.payment_terms LIKE %s AND po.payment_terms LIKE %s THEN
                     CASE
                         WHEN po.po_status = 'CANCELLED' THEN 'CANCELLED'
                         WHEN po.po_status = 'CLOSED' THEN 'CLOSED'
@@ -231,21 +217,20 @@ class MergeService:
                 ELSE 'Unknown'
             END AS status,
             
-            -- Remaining amount calculation
             CASE
-                WHEN po.payment_terms LIKE '%%COD%%' OR (po.payment_terms LIKE '%%AC1%%' AND po.payment_terms NOT LIKE '%%AC2%%') THEN
+                WHEN po.payment_terms LIKE %s OR (po.payment_terms LIKE %s AND po.payment_terms NOT LIKE %s) THEN
                     CASE
-                        WHEN po.requested_qty = 0 THEN 0
+                        WHEN COALESCE(po.requested_qty, 0) = 0 THEN 0
                         WHEN a.ac_date IS NOT NULL THEN 0
-                        WHEN a.ac_date IS NULL THEN po.line_amount
+                        WHEN a.ac_date IS NULL THEN COALESCE(po.line_amount, 0)
                         ELSE 0
                     END
-                WHEN po.payment_terms LIKE '%%AC1%%' AND po.payment_terms LIKE '%%AC2%%' THEN
+                WHEN po.payment_terms LIKE %s AND po.payment_terms LIKE %s THEN
                     CASE
                         WHEN po.po_status = 'CANCELLED' THEN 0
                         WHEN po.po_status = 'CLOSED' THEN 0
-                        WHEN a.ac_date IS NULL THEN po.line_amount
-                        WHEN a.pac_date IS NULL THEN ROUND(CAST(po.line_amount AS NUMERIC) * 0.20, 2)
+                        WHEN a.ac_date IS NULL THEN COALESCE(po.line_amount, 0)
+                        WHEN a.pac_date IS NULL THEN ROUND(CAST(COALESCE(po.line_amount, 0) AS NUMERIC) * 0.20, 2)
                         ELSE 0
                     END
                 ELSE 0
@@ -253,7 +238,6 @@ class MergeService:
             
         FROM po_staging po
         
-        -- LEFT JOIN with Acceptance staging (grouped by milestone type)
         LEFT JOIN (
             SELECT 
                 user_id,
@@ -268,25 +252,32 @@ class MergeService:
            AND po.po_number = a.po_number 
            AND po.po_line_no = a.po_line_no
         
-        -- LEFT JOIN with accounts (for account_name lookup)
-        LEFT JOIN accounts acc ON po.user_id = acc.user_id 
-                              AND po.project_name = acc.project_name
-        
         WHERE po.user_id = %s AND po.is_valid = TRUE
         
         ORDER BY po.po_number, po.po_line_no
         """
         
-        # Execute query
-        with connection.cursor() as cursor:
-            cursor.execute(MERGE_QUERY, [user.id, user.id])
-            columns = [col[0] for col in cursor.description]
-            results = [
-                dict(zip(columns, row))
-                for row in cursor.fetchall()
-            ]
+        params = [
+            '%Survey%', '%Transportation%', '%Work Order%', '%Non DU%', '%Work Order%',
+            '%COD%', '%AC1%', '%AC2%', '%AC1%',
+            '%COD%', '%AC1%', '%AC2%',
+            '%COD%', '%AC1%', '%AC2%', '%AC1%', '%AC2%',
+            '%COD%', '%AC1%', '%AC2%', '%AC1%', '%AC2%',
+            user.id, user.id,
+        ]
         
-        return results
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(MERGE_QUERY, params)
+                columns = [col[0] for col in cursor.description]
+                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+            logger.info(f"Query executed successfully. Returned {len(results)} records")
+            return results
+            
+        except Exception as e:
+            logger.error(f"SQL Query execution failed: {str(e)}", exc_info=True)
+            raise
     
     @staticmethod
     def get_merge_history(user, limit=10):
