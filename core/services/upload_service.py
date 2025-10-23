@@ -342,7 +342,7 @@ class POProcessor(BaseProcessor):
     
     @transaction.atomic
     def process_file(self, file_path: str):
-        """Process PO file - COMPANY-WIDE (no user filtering)"""
+        """Process PO file - COMPANY-WIDE with UPSERT logic"""
         logger.info(f"Processing PO file: {file_path}")
         
         # Read file
@@ -358,18 +358,24 @@ class POProcessor(BaseProcessor):
         df_mapped = self.map_csv_columns(df)
         self.stats['total_rows'] = len(df_mapped)
         
-        # Delete ALL old staging data (company-wide replacement)
+        # Delete ALL old staging data (staging is always replaced)
         logger.info("Deleting old PO staging data...")
         deleted_count = POStaging.objects.all().delete()
         logger.info(f"Deleted {deleted_count[0]} old PO staging records")
         
         # Process rows
         staging_records = []
+        po_updates = []  # For updating existing POs
+        po_inserts = []  # For inserting new POs
+        
+        # Track which PO numbers+lines we've seen in the new file
+        new_file_po_keys = set()
+        
         for idx, row in df_mapped.iterrows():
             try:
                 record_data = {}
                 
-                # Parse and convert fields
+                # Parse all fields (keeping your existing parsing logic)
                 record_data['po_number'] = self.safe_string_truncate(row.get('po_number'), 100)
                 record_data['po_line_no'] = self.safe_string_truncate(row.get('po_line_no'), 50)
                 record_data['project_name'] = self.safe_string_truncate(row.get('project_name'), 255)
@@ -428,7 +434,7 @@ class POProcessor(BaseProcessor):
                 else:
                     self.stats['valid_rows'] += 1
                 
-                # Create staging record (NO USER FIELD)
+                # Create staging record (always)
                 staging_record = POStaging(
                     batch_id=self.batch_id,
                     row_number=idx + 2,
@@ -438,15 +444,76 @@ class POProcessor(BaseProcessor):
                 )
                 staging_records.append(staging_record)
                 
+                # For permanent table: only process valid records
+                if is_valid and record_data['po_number'] and record_data['po_line_no']:
+                    po_key = (record_data['po_number'], record_data['po_line_no'])
+                    new_file_po_keys.add(po_key)
+                    
+                    # Check if this PO already exists in permanent table
+                    from core.models import PurchaseOrder
+                    existing_po = PurchaseOrder.objects.filter(
+                        po_number=record_data['po_number'],
+                        po_line_no=record_data['po_line_no']
+                    ).first()
+                    
+                    if existing_po:
+                        # UPDATE: Record exists, update it
+                        for field, value in record_data.items():
+                            setattr(existing_po, field, value)
+                        existing_po.batch_id = self.batch_id
+                        po_updates.append(existing_po)
+                    else:
+                        # INSERT: New record
+                        new_po = PurchaseOrder(
+                            batch_id=self.batch_id,
+                            **record_data
+                        )
+                        po_inserts.append(new_po)
+                
             except Exception as e:
                 logger.error(f"Error processing row {idx + 2}: {str(e)}")
                 self.stats['invalid_rows'] += 1
         
-        # Bulk create
+        # Bulk create staging records (always replace)
         POStaging.objects.bulk_create(staging_records, batch_size=1000)
+        logger.info(f"Created {len(staging_records)} PO staging records")
         
-        logger.info(f"Processed {len(staging_records)} PO records (company-wide)")
-
+        # Bulk update existing POs
+        from core.models import PurchaseOrder
+        if po_updates:
+            PurchaseOrder.objects.bulk_update(
+                po_updates,
+                fields=[
+                    'project_name', 'project_code', 'site_name', 'site_code',
+                    'item_code', 'item_description', 'item_description_local',
+                    'unit_price', 'requested_qty', 'due_qty', 'billed_qty',
+                    'quantity_cancel', 'line_amount', 'unit', 'currency',
+                    'tax_rate', 'po_status', 'payment_terms', 'payment_method',
+                    'customer', 'rep_office', 'subcontract_no', 'pr_no',
+                    'sales_contract_no', 'version_no', 'shipment_no',
+                    'engineering_code', 'engineering_name', 'subproject_code',
+                    'category', 'center_area', 'product_category', 'bidding_area',
+                    'bill_to', 'ship_to', 'note_to_receiver', 'ff_buyer',
+                    'fob_lookup_code', 'publish_date', 'start_date', 'end_date',
+                    'expire_date', 'acceptance_date', 'acceptance_date_1',
+                    'change_history', 'pr_po_automation', 'batch_id'
+                ],
+                batch_size=1000
+            )
+            logger.info(f"Updated {len(po_updates)} existing PO records")
+        
+        # Bulk insert new POs
+        if po_inserts:
+            PurchaseOrder.objects.bulk_create(po_inserts, batch_size=1000)
+            logger.info(f"Inserted {len(po_inserts)} new PO records")
+        
+        # Count kept records (old records not in new file)
+        from core.models import PurchaseOrder
+        total_in_db = PurchaseOrder.objects.count()
+        kept_count = total_in_db - len(po_updates) - len(po_inserts)
+        logger.info(f"Kept {kept_count} historical PO records (not in new file)")
+        
+        logger.info(f"PO Processing Summary: {len(po_updates)} updated, {len(po_inserts)} inserted, {kept_count} kept")
 
 class AcceptanceProcessor(BaseProcessor):
     """Acceptance Upload Processor"""
@@ -514,7 +581,7 @@ class AcceptanceProcessor(BaseProcessor):
     
     @transaction.atomic
     def process_file(self, file_path: str):
-        """Process Acceptance file - COMPANY-WIDE (no user filtering)"""
+        """Process Acceptance file - COMPANY-WIDE with FULL REPLACEMENT"""
         logger.info(f"Processing Acceptance file: {file_path}")
         
         # Read file
@@ -530,18 +597,26 @@ class AcceptanceProcessor(BaseProcessor):
         df_mapped = self.map_csv_columns(df)
         self.stats['total_rows'] = len(df_mapped)
         
-        # Delete ALL old staging data (company-wide replacement)
+        # Delete ALL old staging data
         logger.info("Deleting old Acceptance staging data...")
         deleted_count = AcceptanceStaging.objects.all().delete()
         logger.info(f"Deleted {deleted_count[0]} old Acceptance staging records")
         
+        # Delete ALL old permanent Acceptance data (FULL REPLACEMENT)
+        logger.info("Deleting ALL old Acceptance permanent data (full replacement)...")
+        from core.models import Acceptance
+        acc_deleted_count = Acceptance.objects.all().delete()
+        logger.info(f"Deleted {acc_deleted_count[0]} old Acceptance permanent records")
+        
         # Process rows
         staging_records = []
+        permanent_records = []
+        
         for idx, row in df_mapped.iterrows():
             try:
                 record_data = {}
                 
-                # Parse and convert fields
+                # Parse fields (keeping your existing logic)
                 record_data['acceptance_no'] = self.safe_string_truncate(row.get('acceptance_no'), 100)
                 record_data['po_number'] = self.safe_string_truncate(row.get('po_number'), 100)
                 record_data['po_line_no'] = self.safe_string_truncate(row.get('po_line_no'), 50)
@@ -580,7 +655,7 @@ class AcceptanceProcessor(BaseProcessor):
                 else:
                     self.stats['valid_rows'] += 1
                 
-                # Create staging record (NO USER FIELD)
+                # Create staging record
                 staging_record = AcceptanceStaging(
                     batch_id=self.batch_id,
                     row_number=idx + 2,
@@ -590,11 +665,23 @@ class AcceptanceProcessor(BaseProcessor):
                 )
                 staging_records.append(staging_record)
                 
+                # Create permanent record (only if valid)
+                if is_valid:
+                    permanent_record = Acceptance(
+                        batch_id=self.batch_id,
+                        **record_data
+                    )
+                    permanent_records.append(permanent_record)
+                
             except Exception as e:
                 logger.error(f"Error processing row {idx + 2}: {str(e)}")
                 self.stats['invalid_rows'] += 1
         
-        # Bulk create
+        # Bulk create staging records
         AcceptanceStaging.objects.bulk_create(staging_records, batch_size=1000)
+        logger.info(f"Created {len(staging_records)} Acceptance staging records")
         
-        logger.info(f"Processed {len(staging_records)} Acceptance records (company-wide)")
+        # Bulk create permanent records (fresh data only)
+        from core.models import Acceptance
+        Acceptance.objects.bulk_create(permanent_records, batch_size=1000)
+        logger.info(f"Inserted {len(permanent_records)} new Acceptance records (full replacement)")

@@ -106,7 +106,7 @@ class MergeStatusView(APIView):
     
     def get(self, request):
         """Get merge status"""
-        result = MergeService.check_staging_data(request.user)
+        result = MergeService.check_staging_data()
         serializer = MergeStatusSerializer(result)
         return Response(serializer.data)
 
