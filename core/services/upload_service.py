@@ -612,25 +612,40 @@ class AcceptanceProcessor(BaseProcessor):
         staging_records = []
         permanent_records = []
         
+        # Track unique keys to avoid duplicates within the same file
+        seen_keys = set()
+        
         for idx, row in df_mapped.iterrows():
             try:
                 record_data = {}
                 
-                # Parse fields (keeping your existing logic)
+                # Parse fields (keeping your existing parsing logic)
                 record_data['acceptance_no'] = self.safe_string_truncate(row.get('acceptance_no'), 100)
                 record_data['po_number'] = self.safe_string_truncate(row.get('po_number'), 100)
                 record_data['po_line_no'] = self.safe_string_truncate(row.get('po_line_no'), 50)
                 record_data['shipment_no'] = self.safe_string_truncate(row.get('shipment_no'), 100)
-                record_data['milestone_type'] = self.safe_string_truncate(row.get('milestone_type'), 50)
+                record_data['milestone_type'] = self.safe_string_truncate(row.get('milestone_type'), 100)
                 record_data['project_code'] = self.safe_string_truncate(row.get('project_code'), 100)
+                record_data['project_name'] = self.safe_string_truncate(row.get('project_name'), 255)
                 record_data['site_name'] = self.safe_string_truncate(row.get('site_name'), 255)
                 record_data['site_code'] = self.safe_string_truncate(row.get('site_code'), 100)
-                record_data['acceptance_description'] = row.get('acceptance_description')
+                record_data['site_id'] = self.safe_string_truncate(row.get('site_id'), 255)
+                record_data['item_description'] = row.get('item_description')
+                record_data['item_description_local'] = row.get('item_description_local')
+                record_data['engineering_code'] = self.safe_string_truncate(row.get('engineering_code'), 100)
+                record_data['business_type'] = row.get('business_type')
+                record_data['product_category'] = row.get('product_category')
+                record_data['requested_qty'] = self.parse_integer(row.get('requested_qty'))
+                record_data['acceptance_qty'] = self.parse_integer(row.get('acceptance_qty'))
+                record_data['unit_price'] = self.parse_decimal(row.get('unit_price'))
+                record_data['acceptance_milestone'] = self.safe_string_truncate(row.get('acceptance_milestone'), 100)
+                record_data['cancel_remaining_qty'] = row.get('cancel_remaining_qty')
                 record_data['unit'] = self.safe_string_truncate(row.get('unit'), 50)
-                record_data['currency'] = self.safe_string_truncate(row.get('currency'), 10)
-                record_data['bill_amount'] = self.parse_decimal(row.get('bill_amount'))
-                record_data['tax_amount'] = self.parse_decimal(row.get('tax_amount'))
-                record_data['accepted_qty'] = self.parse_decimal(row.get('accepted_qty'))
+                record_data['bidding_area'] = self.safe_string_truncate(row.get('bidding_area'), 255)
+                record_data['customer'] = row.get('customer')
+                record_data['rep_office'] = self.safe_string_truncate(row.get('rep_office'), 255)
+                record_data['subproject_code'] = self.safe_string_truncate(row.get('subproject_code'), 100)
+                record_data['engineering_category'] = self.safe_string_truncate(row.get('engineering_category'), 255)
                 record_data['center_area'] = self.safe_string_truncate(row.get('center_area'), 255)
                 record_data['planned_completion_date'] = self.parse_date(row.get('planned_completion_date'))
                 record_data['actual_completion_date'] = self.parse_date(row.get('actual_completion_date'))
@@ -644,7 +659,7 @@ class AcceptanceProcessor(BaseProcessor):
                 record_data['remarks'] = row.get('remarks')
                 record_data['service_code'] = self.parse_decimal(row.get('service_code'))
                 record_data['payment_percentage'] = self.safe_string_truncate(row.get('payment_percentage'), 50)
-                record_data['record_status'] = self.safe_string_truncate(row.get('record_status'), 50)
+                record_data['record_status'] = self.safe_string_truncate(row.get('record_status'), 50) or 'active'
                 
                 # Validate
                 validation_errors = self.validate_record(record_data, idx + 2)
@@ -665,13 +680,26 @@ class AcceptanceProcessor(BaseProcessor):
                 )
                 staging_records.append(staging_record)
                 
-                # Create permanent record (only if valid)
-                if is_valid:
-                    permanent_record = Acceptance(
-                        batch_id=self.batch_id,
-                        **record_data
+                # Create permanent record (only if valid and not duplicate)
+                if is_valid and record_data.get('acceptance_no') and record_data.get('po_number') and record_data.get('po_line_no'):
+                    # Create unique key to check for duplicates within the file
+                    unique_key = (
+                        record_data['acceptance_no'],
+                        record_data['po_number'],
+                        record_data['po_line_no'],
+                        record_data.get('shipment_no') or 'NULL'
                     )
-                    permanent_records.append(permanent_record)
+                    
+                    if unique_key not in seen_keys:
+                        seen_keys.add(unique_key)
+                        
+                        permanent_record = Acceptance(
+                            batch_id=self.batch_id,
+                            **record_data
+                        )
+                        permanent_records.append(permanent_record)
+                    else:
+                        logger.warning(f"Duplicate record skipped in file at row {idx + 2}: {unique_key}")
                 
             except Exception as e:
                 logger.error(f"Error processing row {idx + 2}: {str(e)}")
@@ -683,5 +711,8 @@ class AcceptanceProcessor(BaseProcessor):
         
         # Bulk create permanent records (fresh data only)
         from core.models import Acceptance
-        Acceptance.objects.bulk_create(permanent_records, batch_size=1000)
-        logger.info(f"Inserted {len(permanent_records)} new Acceptance records (full replacement)")
+        if permanent_records:
+            Acceptance.objects.bulk_create(permanent_records, batch_size=1000)
+            logger.info(f"Inserted {len(permanent_records)} new Acceptance records (full replacement)")
+        else:
+            logger.warning("No valid Acceptance records to insert")
