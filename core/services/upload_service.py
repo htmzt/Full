@@ -8,7 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-
+from core.services.account_service import AccountService
 from core.models import (
     POStaging, AcceptanceStaging, UploadHistory,
     PurchaseOrder, Acceptance
@@ -480,7 +480,23 @@ class POProcessor(BaseProcessor):
         total_in_db = PurchaseOrder.objects.count()
         kept_count = total_in_db - len(po_updates) - len(po_inserts)
         logger.info(f"Kept {kept_count} historical PO records (not in new file)")
+        logger.info("Extracting accounts from processed PO data...")
+        unique_projects = set()
         
+        for record in po_inserts + po_updates:
+            if record.project_name:
+                unique_projects.add(record.project_name.strip())
+        
+        account_created = 0
+        for project_name in unique_projects:
+            if project_name:
+                try:
+                    AccountService.get_or_create_account(project_name)
+                    account_created += 1
+                except Exception as e:
+                    logger.warning(f"Failed to create account for '{project_name}': {str(e)}")
+        
+        logger.info(f"Processed {len(unique_projects)} unique projects, created/verified {account_created} accounts")
         logger.info(f"PO Processing Summary: {len(po_updates)} updated, {len(po_inserts)} inserted, {kept_count} kept")
 
 class AcceptanceProcessor(BaseProcessor):
