@@ -1,6 +1,15 @@
-// Bulk Assignment Interface Functions
+// Enhanced Bulk Assignment Interface Functions
 
 let selectedPOLines = [];
+let allPOLinesData = []; // Store all loaded data
+
+// Auto-load data when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('available-po-lines-table')) {
+        loadAssignmentStats();
+        loadAvailablePOLinesForAssignment(); // Auto-load on page load
+    }
+});
 
 async function loadAssignmentStats() {
     const statsDiv = document.getElementById('assignment-stats');
@@ -13,35 +22,35 @@ async function loadAssignmentStats() {
         if (data) {
             let html = '<div class="stats-grid">';
             html += `<div class="stat-card">
-                <h3>Unassigned PO Lines</h3>
-                <p>${data.total_unassigned}</p>
+                <h3>📦 Unassigned PO Lines</h3>
+                <p class="stat-number">${data.total_unassigned}</p>
             </div>`;
             html += `<div class="stat-card">
-                <h3>Assigned PO Lines</h3>
-                <p>${data.total_assigned}</p>
+                <h3>✅ Assigned PO Lines</h3>
+                <p class="stat-number">${data.total_assigned}</p>
             </div>`;
             html += `<div class="stat-card">
-                <h3>With External POs</h3>
-                <p>${data.total_with_external_po}</p>
+                <h3>🔗 With External POs</h3>
+                <p class="stat-number">${data.total_with_external_po}</p>
             </div>`;
             html += `<div class="stat-card">
-                <h3>Pending Approvals</h3>
-                <p>${data.pending_assignments}</p>
+                <h3>⏳ Pending Approvals</h3>
+                <p class="stat-number">${data.pending_assignments}</p>
             </div>`;
             html += '</div>';
             
             // Show distribution
             if (data.assignment_distribution && data.assignment_distribution.length > 0) {
                 html += '<h4>Assignment Distribution</h4>';
-                html += '<table><thead><tr><th>User</th><th>Role</th><th>Assigned POs</th></tr></thead><tbody>';
+                html += '<div style="overflow-x: auto;"><table class="stats-table"><thead><tr><th>User</th><th>Role</th><th>Assigned POs</th></tr></thead><tbody>';
                 data.assignment_distribution.forEach(dist => {
                     html += `<tr>
                         <td>${dist.full_name}</td>
                         <td>${dist.role}</td>
-                        <td>${dist.assigned_count}</td>
+                        <td><span class="badge">${dist.assigned_count}</span></td>
                     </tr>`;
                 });
-                html += '</tbody></table>';
+                html += '</tbody></table></div>';
             }
             
             statsDiv.innerHTML = html;
@@ -53,7 +62,8 @@ async function loadAssignmentStats() {
 
 async function loadAvailablePOLinesForAssignment(page = 1) {
     const tableDiv = document.getElementById('available-po-lines-table');
-    tableDiv.innerHTML = '<div class="loading"></div> Loading...';
+    const loadingMsg = page === 1 ? '<div class="loading">🔄 Loading PO lines...</div>' : '';
+    tableDiv.innerHTML = loadingMsg;
     
     // Get filter values
     const search = document.getElementById('search-po-lines').value;
@@ -62,7 +72,7 @@ async function loadAvailablePOLinesForAssignment(page = 1) {
     const project = document.getElementById('filter-po-project').value;
     
     // Build query params
-    let url = `${API_ENDPOINTS.AVAILABLE_FOR_ASSIGNMENT}?page=${page}&per_page=50`;
+    let url = `${API_ENDPOINTS.AVAILABLE_FOR_ASSIGNMENT}?page=${page}&per_page=100`;
     
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (status) url += `&status=${encodeURIComponent(status)}`;
@@ -75,13 +85,33 @@ async function loadAvailablePOLinesForAssignment(page = 1) {
         });
         
         if (data && data.results && data.results.length > 0) {
-            let html = '<div class="bulk-assignment-controls">';
-            html += `<p><strong>Selected:</strong> <span id="selected-count">0</span> PO lines</p>`;
-            html += '<button id="assign-selected-btn" onclick="showAssignmentModal()" disabled>Assign Selected</button>';
+            allPOLinesData = data.results; // Store for bulk operations
+            
+            let html = '<div class="bulk-assignment-header">';
+            html += `<div class="bulk-controls">`;
+            html += `<p><strong>Total Available:</strong> <span class="badge badge-primary">${data.count || data.results.length}</span> PO lines</p>`;
+            html += `<p><strong>Selected:</strong> <span id="selected-count" class="badge badge-success">0</span> PO lines</p>`;
+            html += `</div>`;
+            html += `<div class="action-buttons">`;
+            html += `<button id="assign-selected-btn" onclick="showAssignmentModal()" disabled class="btn-primary">📤 Assign Selected</button>`;
+            html += `<button onclick="toggleBulkPOInput()" class="btn-secondary">📝 Bulk PO Input</button>`;
+            html += `<button onclick="clearSelection()" class="btn-secondary">🗑️ Clear Selection</button>`;
+            html += `</div>`;
             html += '</div>';
             
-            html += '<div style="overflow-x: auto;"><table><thead><tr>';
-            html += '<th><input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll(this)"></th>';
+            // Bulk PO Input Section (Hidden by default)
+            html += `<div id="bulk-po-input-section" style="display: none;" class="bulk-input-section">
+                <h4>Bulk PO Selection</h4>
+                <p>Enter PO numbers or PO IDs (one per line or comma-separated):</p>
+                <textarea id="bulk-po-ids-input" rows="5" placeholder="Example:&#10;INWI-2024-001&#10;INWI-2024-002, INWI-2024-003&#10;or paste Excel column"></textarea>
+                <div class="bulk-input-buttons">
+                    <button onclick="selectFromBulkInput()" class="btn-primary">✓ Select These POs</button>
+                    <button onclick="toggleBulkPOInput()" class="btn-secondary">Cancel</button>
+                </div>
+            </div>`;
+            
+            html += '<div style="overflow-x: auto;"><table class="po-lines-table"><thead><tr>';
+            html += '<th><input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll(this)" title="Select All"></th>';
             html += '<th>PO Number</th>';
             html += '<th>Line No</th>';
             html += '<th>Project</th>';
@@ -94,20 +124,20 @@ async function loadAvailablePOLinesForAssignment(page = 1) {
             
             data.results.forEach(po => {
                 const isChecked = selectedPOLines.some(selected => selected.po_id === po.po_id);
-                html += '<tr>';
+                html += '<tr class="' + (isChecked ? 'selected-row' : '') + '">';
                 html += `<td><input type="checkbox" class="po-checkbox" 
                          value="${po.po_id}" 
                          data-po-number="${po.po_number}" 
                          data-po-line="${po.po_line_no}"
                          ${isChecked ? 'checked' : ''}
                          onchange="togglePOLineSelection(this)"></td>`;
-                html += `<td>${po.po_number}</td>`;
+                html += `<td><strong>${po.po_number}</strong></td>`;
                 html += `<td>${po.po_line_no}</td>`;
                 html += `<td>${po.project_name || 'N/A'}</td>`;
                 html += `<td>${po.account_name || 'N/A'}</td>`;
-                html += `<td title="${po.item_description || 'N/A'}">${po.item_description ? po.item_description.substring(0, 40) + '...' : 'N/A'}</td>`;
-                html += `<td>${po.category || 'N/A'}</td>`;
-                html += `<td>${formatCurrency(po.line_amount)}</td>`;
+                html += `<td><div class="truncate-text" title="${po.item_description || 'N/A'}">${po.item_description ? po.item_description.substring(0, 50) + '...' : 'N/A'}</div></td>`;
+                html += `<td><span class="badge badge-info">${po.category || 'N/A'}</span></td>`;
+                html += `<td class="amount">${formatCurrency(po.line_amount)}</td>`;
                 html += `<td><span class="badge badge-${getStatusBadgeClass(po.status)}">${po.status || 'N/A'}</span></td>`;
                 html += '</tr>';
             });
@@ -119,14 +149,14 @@ async function loadAvailablePOLinesForAssignment(page = 1) {
             updateSelectedCount();
             
             // Render pagination if needed
-            if (data.count > 50) {
+            if (data.count > 100) {
                 renderAssignmentPagination(data.count, page);
             }
         } else {
-            tableDiv.innerHTML = '<div class="empty-state"><p>No unassigned PO lines found</p></div>';
+            tableDiv.innerHTML = '<div class="empty-state"><p>📭 No unassigned PO lines found</p><p>Try adjusting your search filters</p></div>';
         }
     } catch (error) {
-        tableDiv.innerHTML = `<div class="error">Failed to load PO lines: ${error.message}</div>`;
+        tableDiv.innerHTML = `<div class="error">❌ Failed to load PO lines: ${error.message}</div>`;
     }
 }
 
@@ -142,6 +172,7 @@ function togglePOLineSelection(checkbox) {
     const poId = checkbox.value;
     const poNumber = checkbox.dataset.poNumber;
     const poLine = checkbox.dataset.poLine;
+    const row = checkbox.closest('tr');
     
     if (checkbox.checked) {
         // Add to selection if not already there
@@ -152,9 +183,11 @@ function togglePOLineSelection(checkbox) {
                 po_line: poLine
             });
         }
+        row.classList.add('selected-row');
     } else {
         // Remove from selection
         selectedPOLines = selectedPOLines.filter(po => po.po_id !== poId);
+        row.classList.remove('selected-row');
     }
     
     updateSelectedCount();
@@ -163,6 +196,7 @@ function togglePOLineSelection(checkbox) {
 function updateSelectedCount() {
     const countSpan = document.getElementById('selected-count');
     const assignBtn = document.getElementById('assign-selected-btn');
+    const selectAllCheckbox = document.getElementById('select-all-checkbox');
     
     if (countSpan) {
         countSpan.textContent = selectedPOLines.length;
@@ -171,6 +205,101 @@ function updateSelectedCount() {
     if (assignBtn) {
         assignBtn.disabled = selectedPOLines.length === 0;
     }
+    
+    // Update select all checkbox state
+    if (selectAllCheckbox) {
+        const allCheckboxes = document.querySelectorAll('.po-checkbox');
+        const checkedBoxes = document.querySelectorAll('.po-checkbox:checked');
+        selectAllCheckbox.checked = allCheckboxes.length > 0 && allCheckboxes.length === checkedBoxes.length;
+        selectAllCheckbox.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < allCheckboxes.length;
+    }
+}
+
+function clearSelection() {
+    selectedPOLines = [];
+    const allCheckboxes = document.querySelectorAll('.po-checkbox');
+    allCheckboxes.forEach(cb => {
+        cb.checked = false;
+        const row = cb.closest('tr');
+        if (row) row.classList.remove('selected-row');
+    });
+    updateSelectedCount();
+}
+
+function toggleBulkPOInput() {
+    const section = document.getElementById('bulk-po-input-section');
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+    } else {
+        section.style.display = 'none';
+        document.getElementById('bulk-po-ids-input').value = '';
+    }
+}
+
+function selectFromBulkInput() {
+    const input = document.getElementById('bulk-po-ids-input').value;
+    if (!input.trim()) {
+        alert('Please enter PO numbers or IDs');
+        return;
+    }
+    
+    // Parse input - handle newlines, commas, and whitespace
+    const poIdentifiers = input
+        .split(/[\n,]+/)
+        .map(id => id.trim())
+        .filter(id => id.length > 0);
+    
+    if (poIdentifiers.length === 0) {
+        alert('No valid PO identifiers found');
+        return;
+    }
+    
+    let matchedCount = 0;
+    let notFoundList = [];
+    
+    // Check each PO in the current loaded data
+    poIdentifiers.forEach(identifier => {
+        const found = allPOLinesData.find(po => 
+            po.po_number === identifier || 
+            po.po_id === identifier ||
+            po.po_number.includes(identifier)
+        );
+        
+        if (found) {
+            // Check if not already selected
+            if (!selectedPOLines.some(selected => selected.po_id === found.po_id)) {
+                selectedPOLines.push({
+                    po_id: found.po_id,
+                    po_number: found.po_number,
+                    po_line: found.po_line_no
+                });
+                
+                // Check the checkbox in the UI
+                const checkbox = document.querySelector(`.po-checkbox[value="${found.po_id}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    const row = checkbox.closest('tr');
+                    if (row) row.classList.add('selected-row');
+                }
+                matchedCount++;
+            }
+        } else {
+            notFoundList.push(identifier);
+        }
+    });
+    
+    // Show results
+    let message = `✓ Selected ${matchedCount} PO line(s)`;
+    if (notFoundList.length > 0) {
+        message += `\n\n⚠️ Not found or not available (${notFoundList.length}):\n${notFoundList.join('\n')}`;
+        message += '\n\nNote: POs might be already assigned or not in current filter results.';
+    }
+    
+    alert(message);
+    
+    // Update UI
+    updateSelectedCount();
+    toggleBulkPOInput();
 }
 
 async function loadAssignableUsers() {
@@ -204,11 +333,21 @@ function showAssignmentModal() {
     const modal = document.getElementById('assignment-modal');
     const modalContent = document.getElementById('assignment-modal-content');
     
+    // Calculate total amount of selected POs
+    let totalAmount = 0;
+    selectedPOLines.forEach(selected => {
+        const poData = allPOLinesData.find(po => po.po_id === selected.po_id);
+        if (poData && poData.line_amount) {
+            totalAmount += parseFloat(poData.line_amount);
+        }
+    });
+    
     modalContent.innerHTML = `
-        <h3>Assign ${selectedPOLines.length} PO Line(s)</h3>
+        <h3>📤 Assign ${selectedPOLines.length} PO Line(s)</h3>
+        <p class="modal-summary">Total Amount: <strong>${formatCurrency(totalAmount)}</strong></p>
         <form id="bulk-assignment-form" onsubmit="executeBulkAssignment(event)">
             <div class="form-group">
-                <label>Assign to:</label>
+                <label>Assign to: <span class="required">*</span></label>
                 <select id="bulk-assign-user" required>
                     <option value="">Loading users...</option>
                 </select>
@@ -220,18 +359,17 @@ function showAssignmentModal() {
             <div class="form-group">
                 <strong>Selected PO Lines:</strong>
                 <div class="selected-po-list">
-                    ${selectedPOLines.map(po => `<div>${po.po_number}-${po.po_line}</div>`).join('')}
+                    ${selectedPOLines.map(po => `<div class="po-item">✓ ${po.po_number}-${po.po_line}</div>`).join('')}
                 </div>
             </div>
             <div class="modal-actions">
-                <button type="button" onclick="closeAssignmentModal()">Cancel</button>
-                <button type="submit" class="btn-primary">Create Assignment</button>
+                <button type="submit" class="btn-primary">✓ Confirm Assignment</button>
+                <button type="button" onclick="closeAssignmentModal()" class="btn-secondary">Cancel</button>
             </div>
         </form>
-        <div id="bulk-assignment-result"></div>
     `;
     
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
     
     // Load users
     loadAssignableUsers();
@@ -247,100 +385,103 @@ async function executeBulkAssignment(event) {
     
     const userId = document.getElementById('bulk-assign-user').value;
     const notes = document.getElementById('bulk-assign-notes').value;
-    const resultDiv = document.getElementById('bulk-assignment-result');
     
     if (!userId) {
-        resultDiv.innerHTML = '<div class="error">Please select a user</div>';
+        alert('Please select a user');
         return;
     }
     
-    resultDiv.innerHTML = '<div class="loading"></div> Creating assignment...';
+    if (selectedPOLines.length === 0) {
+        alert('No PO lines selected');
+        return;
+    }
     
-    // Extract just the po_id values
-    const poIds = selectedPOLines.map(po => po.po_id);
+    // Disable submit button
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Assigning...';
     
     try {
-        const data = await apiCall(API_ENDPOINTS.CREATE_ASSIGNMENT, {
+        const payload = {
+            po_ids: selectedPOLines.map(po => po.po_id),
+            assigned_to: userId,
+            notes: notes
+        };
+        
+        const response = await apiCall(API_ENDPOINTS.CREATE_ASSIGNMENT, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                po_ids: poIds,
-                assigned_to_user_id: userId,
-                assignment_notes: notes
-            })
+            body: JSON.stringify(payload)
         });
         
-        if (data) {
-            resultDiv.innerHTML = `
-                <div class="success">
-                    <h4>✅ Assignment Created Successfully!</h4>
-                    <p><strong>Assignment ID:</strong> ${data.id}</p>
-                    <p><strong>PO Lines:</strong> ${data.po_count}</p>
-                    <p><strong>Assigned To:</strong> ${data.assigned_to_name}</p>
-                    <p><strong>Status:</strong> ${data.status}</p>
-                </div>
-            `;
+        if (response) {
+            alert(`✓ Successfully assigned ${selectedPOLines.length} PO line(s)!`);
+            closeAssignmentModal();
             
-            // Clear selection
-            selectedPOLines = [];
-            
-            // Reload data
-            setTimeout(() => {
-                closeAssignmentModal();
-                loadAvailablePOLinesForAssignment();
-                loadAssignmentStats();
-            }, 2000);
+            // Clear selection and reload data
+            clearSelection();
+            loadAssignmentStats();
+            loadAvailablePOLinesForAssignment();
         }
     } catch (error) {
-        resultDiv.innerHTML = `<div class="error">Failed to create assignment: ${error.message}</div>`;
+        alert(`❌ Assignment failed: ${error.message}`);
+        submitBtn.disabled = false;
+        submitBtn.textContent = '✓ Confirm Assignment';
     }
 }
 
 function renderAssignmentPagination(totalCount, currentPage) {
     const paginationDiv = document.getElementById('assignment-pagination');
-    const perPage = 50;
-    const totalPages = Math.ceil(totalCount / perPage);
+    if (!paginationDiv) return;
     
-    if (totalPages <= 1) {
-        paginationDiv.innerHTML = '';
-        return;
-    }
+    const perPage = 100;
+    const totalPages = Math.ceil(totalCount / perPage);
     
     let html = '<div class="pagination">';
     
     // Previous button
     if (currentPage > 1) {
-        html += `<button onclick="loadAvailablePOLinesForAssignment(${currentPage - 1})">Previous</button>`;
+        html += `<button onclick="loadAvailablePOLinesForAssignment(${currentPage - 1})">« Previous</button>`;
     }
     
     // Page numbers
-    let startPage = Math.max(1, currentPage - 2);
-    let endPage = Math.min(totalPages, startPage + 4);
-    
-    if (endPage - startPage < 4) {
-        startPage = Math.max(1, endPage - 4);
+    for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+        const active = i === currentPage ? 'active' : '';
+        html += `<button class="${active}" onclick="loadAvailablePOLinesForAssignment(${i})">${i}</button>`;
     }
     
-    for (let i = startPage; i <= endPage; i++) {
-        const activeClass = i === currentPage ? 'active' : '';
-        html += `<button class="${activeClass}" onclick="loadAvailablePOLinesForAssignment(${i})">${i}</button>`;
+    if (totalPages > 5) {
+        html += '<span>...</span>';
+        html += `<button onclick="loadAvailablePOLinesForAssignment(${totalPages})">${totalPages}</button>`;
     }
     
     // Next button
     if (currentPage < totalPages) {
-        html += `<button onclick="loadAvailablePOLinesForAssignment(${currentPage + 1})">Next</button>`;
+        html += `<button onclick="loadAvailablePOLinesForAssignment(${currentPage + 1})">Next »</button>`;
     }
     
-    html += `</div><p style="text-align: center; margin-top: 10px;">Page ${currentPage} of ${totalPages} (${totalCount} total PO lines)</p>`;
+    html += `<span class="page-info">Page ${currentPage} of ${totalPages} (${totalCount} total)</span>`;
+    html += '</div>';
+    
     paginationDiv.innerHTML = html;
 }
 
-// Close modal when clicking outside
-window.onclick = function(event) {
-    const modal = document.getElementById('assignment-modal');
-    if (event.target === modal) {
-        closeAssignmentModal();
-    }
+// Helper function for currency formatting
+function formatCurrency(amount) {
+    if (!amount && amount !== 0) return 'N/A';
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2
+    }).format(amount);
+}
+
+// Helper function for status badge classes
+function getStatusBadgeClass(status) {
+    if (!status) return 'secondary';
+    
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes('closed') || statusLower.includes('completed')) return 'success';
+    if (statusLower.includes('pending')) return 'warning';
+    if (statusLower.includes('cancelled') || statusLower.includes('rejected')) return 'danger';
+    return 'info';
 }

@@ -167,20 +167,20 @@
             <div id="merged-data-pagination"></div>
         </section>
 
-        <!-- Assignments Section -->
+        <!-- Enhanced PO Assignments Section -->
         <section id="assignments-section" class="section">
             <h2>PO Assignments</h2>
             
-            <!-- NEW: Bulk Assignment Interface -->
+            <!-- Bulk Assignment Interface -->
             <div class="bulk-assignment-interface">
                 <h3>📋 Bulk Assign PO Lines to Users</h3>
                 
-                <!-- Assignment Stats -->
+                <!-- Assignment Statistics -->
                 <div id="assignment-stats" class="assignment-stats">
-                    <button onclick="loadAssignmentStats()">Refresh Stats</button>
+                    <button onclick="loadAssignmentStats()" class="btn-secondary">🔄 Refresh Stats</button>
                 </div>
                 
-                <!-- Filters -->
+                <!-- Search Filters -->
                 <div class="filters">
                     <input type="text" id="search-po-lines" placeholder="Search PO number, description...">
                     <select id="filter-po-status">
@@ -198,38 +198,36 @@
                         <option value="Transportation">Transportation</option>
                         <option value="Site Engineer">Site Engineer</option>
                     </select>
-                    <input type="text" id="filter-po-project" placeholder="Project name...">
-                    <button onclick="loadAvailablePOLinesForAssignment()">Search</button>
+                    <input type="text" id="filter-po-project" placeholder="Filter by project...">
+                    <button onclick="loadAvailablePOLinesForAssignment()" class="btn-primary">🔍 Search</button>
                 </div>
                 
-                <!-- Available PO Lines Table -->
+                <!-- Available PO Lines Table (Auto-loads on page load) -->
                 <div id="available-po-lines-table"></div>
                 <div id="assignment-pagination"></div>
             </div>
             
-            <hr style="margin: 40px 0;">
-            
-            <!-- Existing Assignment Views -->
-            <div class="assignments-list">
+            <!-- My Assignments Section -->
+            <div class="my-assignments-section" style="margin-top: 3rem;">
                 <h3>My Assignments (Assigned to Me)</h3>
-                <button onclick="loadMyAssignments()">Refresh</button>
-                <div id="my-assignments"></div>
+                <button onclick="loadMyAssignments()" class="btn-secondary">🔄 Refresh</button>
+                <div id="my-assignments-table"></div>
             </div>
-
-            <div class="assignments-list">
-                <h3>Created Assignments</h3>
-                <button onclick="loadCreatedAssignments()">Refresh</button>
-                <div id="created-assignments"></div>
+            
+            <!-- Created Assignments Section -->
+            <div class="created-assignments-section" style="margin-top: 3rem;">
+                <h3>Created Assignments (I Assigned to Others)</h3>
+                <button onclick="loadCreatedAssignments()" class="btn-secondary">🔄 Refresh</button>
+                <div id="created-assignments-table"></div>
             </div>
         </section>
 
         <!-- Assignment Modal -->
-        <div id="assignment-modal" class="modal">
-            <div class="modal-content" id="assignment-modal-content">
-                <!-- Content will be dynamically loaded -->
+        <div id="assignment-modal">
+            <div id="assignment-modal-content">
+                <!-- Modal content will be dynamically inserted here -->
             </div>
         </div>
-
         <!-- External POs Section -->
         <section id="external-pos-section" class="section">
             <h2>External POs</h2>

@@ -1,23 +1,23 @@
 """
 Assignment Views
 """
-from rest_framework import status, generics, permissions
+from rest_framework import status, generics, permissions, filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Count, Q
 
 from .models import POAssignment
 from .serializers import (
     AssignmentCreateSerializer, AssignmentRespondSerializer,
-    AssignmentSerializer, AssignmentListSerializer
+    AssignmentSerializer, AssignmentListSerializer,
+    AvailablePOLineForAssignmentSerializer, AssignableUserSerializer
 )
 from .services.assignment_service import AssignmentService
 from accounts.permissions import CanAssignPOs
 from core.models import MergedData
-
-from core.models import MergedData
 from accounts.models import User
-from django.db.models import Count, Q
 
 class AssignmentCreateView(APIView):
     """Create PO assignment"""
