@@ -1,5 +1,29 @@
 // Main application functions
-
+function showSection(sectionName) {
+    // Hide all sections
+    const sections = document.querySelectorAll('.section');
+    sections.forEach(section => {
+        section.classList.remove('active');
+    });
+    
+    // Show selected section
+    const targetSection = document.getElementById(`${sectionName}-section`);
+    if (targetSection) {
+        targetSection.classList.add('active');
+        
+        // Load data when section is shown
+        if (sectionName === 'assignments') {
+            const user = getUserData();
+            if (user && (user.can_assign_pos)) {
+                loadAssignmentStats();
+                loadAvailablePOLinesForAssignment();
+                loadAssignableUsers();
+            }
+            loadMyAssignments();
+            loadCreatedAssignments();
+        }
+    }
+}
 function showSection(sectionName) {
     // Hide all sections
     const sections = document.querySelectorAll('.section');

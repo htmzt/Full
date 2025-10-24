@@ -37,12 +37,13 @@ class AssignmentService:
         # Get assigned_to user
         try:
             assigned_to_user = User.objects.get(id=assigned_to_user_id)
+            if assigned_to_user.role not in ['ADMIN', 'PD', 'PM']:
+                raise ValueError("Can only assign to ADMIN, PD, or PM roles")
         except User.DoesNotExist:
             raise ValueError("Assigned user not found")
         
-        # Validate PO IDs exist and are not assigned
+        # Validate PO IDs exist (REMOVED user filter - MergedData is company-wide!)
         merged_data_records = MergedData.objects.filter(
-            user=assigned_by_user,
             po_id__in=po_ids
         )
         
@@ -108,9 +109,8 @@ class AssignmentService:
             assignment.responded_at = timezone.now()
             assignment.save()
             
-            # Mark PO lines as assigned in merged_data
+            # Mark PO lines as assigned in merged_data (REMOVED user filter!)
             MergedData.objects.filter(
-                user=assignment.assigned_by,
                 po_id__in=assignment.po_ids
             ).update(
                 is_assigned=True,

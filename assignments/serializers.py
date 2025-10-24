@@ -82,3 +82,48 @@ class AssignmentListSerializer(serializers.ModelSerializer):
             'id', 'po_count', 'assigned_to_name', 'assigned_by_name',
             'status', 'created_at', 'responded_at'
         ]
+
+class AvailablePOLineForAssignmentSerializer(serializers.Serializer):
+    """Serializer for PO lines available for assignment"""
+    id = serializers.UUIDField(read_only=True)
+    po_id = serializers.CharField()
+    po_number = serializers.CharField()
+    po_line_no = serializers.CharField()
+    project_name = serializers.CharField()
+    project_code = serializers.CharField(allow_null=True)
+    account_name = serializers.CharField(allow_null=True)
+    site_name = serializers.CharField(allow_null=True)
+    item_description = serializers.CharField(allow_null=True)
+    category = serializers.CharField(allow_null=True)
+    unit_price = serializers.DecimalField(max_digits=12, decimal_places=4, allow_null=True)
+    requested_qty = serializers.DecimalField(max_digits=12, decimal_places=2, allow_null=True)
+    line_amount = serializers.DecimalField(max_digits=15, decimal_places=2, allow_null=True)
+    unit = serializers.CharField(allow_null=True)
+    currency = serializers.CharField(allow_null=True)
+    payment_terms = serializers.CharField(allow_null=True)
+    status = serializers.CharField(allow_null=True)
+    po_status = serializers.CharField(allow_null=True)
+    is_assigned = serializers.BooleanField()
+    has_external_po = serializers.BooleanField()
+    publish_date = serializers.DateField(allow_null=True)
+    
+    # Computed field
+    is_selectable = serializers.SerializerMethodField()
+    
+    def get_is_selectable(self, obj):
+        """Check if this PO line can be selected for assignment"""
+        return not obj.is_assigned and not obj.has_external_po
+
+
+class AssignableUserSerializer(serializers.ModelSerializer):
+    """Serializer for users who can receive assignments"""
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    current_assignment_count = serializers.IntegerField(read_only=True, default=0)
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'email', 'full_name', 'role', 'role_display',
+            'is_active', 'current_assignment_count'
+        ]
+        read_only_fields = ['id', 'email', 'full_name', 'role', 'is_active']

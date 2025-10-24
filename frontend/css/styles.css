@@ -494,3 +494,102 @@ table tr:hover {
     font-size: 16px;
     margin-bottom: 20px;
 }
+
+/* Bulk Assignment Interface */
+.bulk-assignment-interface {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 5px;
+    margin-bottom: 30px;
+}
+
+.bulk-assignment-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: #e8f4f8;
+    border-radius: 4px;
+}
+
+.bulk-assignment-controls p {
+    margin: 0;
+    font-weight: bold;
+}
+
+#assign-selected-btn {
+    background-color: #27ae60;
+}
+
+#assign-selected-btn:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
+}
+
+.selected-po-list {
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.selected-po-list div {
+    padding: 5px;
+    border-bottom: 1px solid #ddd;
+}
+
+.selected-po-list div:last-child {
+    border-bottom: none;
+}
+
+/* Assignment Stats */
+.assignment-stats {
+    margin-bottom: 20px;
+}
+
+/* Checkbox in tables */
+table input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    cursor: pointer;
+}
+
+/* Modal improvements */
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.modal-content {
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* PO line checkbox styling */
+.po-checkbox {
+    transform: scale(1.2);
+    cursor: pointer;
+}
+
+#select-all-checkbox {
+    transform: scale(1.2);
+    cursor: pointer;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .bulk-assignment-controls {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .bulk-assignment-controls button {
+        width: 100%;
+    }
+}

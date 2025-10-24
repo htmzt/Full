@@ -22,7 +22,7 @@ class ExternalPOService:
         Get available PO lines for creating External PO
         
         For PM: Only assigned & approved PO lines
-        For Admin/PD: All available PO lines
+        For Admin/PD: All assigned PO lines (or optionally all available)
         
         Args:
             user: User object
@@ -31,23 +31,27 @@ class ExternalPOService:
             QuerySet of MergedData
         """
         base_query = MergedData.objects.filter(
-            user=user,
-            has_external_po=False
+            has_external_po=False  # Not yet used in External PO
         )
         
         if user.role == 'PM':
-            # PM sees only assigned POs
+            # PM sees only their assigned POs
             return base_query.filter(
                 is_assigned=True,
                 assigned_to=user
             )
         elif user.role in ['ADMIN', 'PD']:
-            # Admin/PD see all available
-            return base_query
+            # Admin/PD can create External PO from any assigned PO
+            # Or optionally: show ALL available POs (even unassigned)
+            # Option 1: Only assigned POs
+            return base_query.filter(is_assigned=True)
+            
+            # Option 2: All available POs (uncomment if needed)
+            # return base_query
         else:
             # Others cannot create External POs
             return MergedData.objects.none()
-    
+        
     @staticmethod
     @transaction.atomic
     def create_external_po(po_lines_data, assigned_to_sbc_id, created_by_user, 

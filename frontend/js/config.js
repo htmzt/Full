@@ -26,6 +26,10 @@ const API_ENDPOINTS = {
     MY_ASSIGNMENTS: `${API_BASE_URL}/assignments/my-assignments/`,
     ASSIGNMENT_RESPOND: (id) => `${API_BASE_URL}/assignments/${id}/respond/`,
     
+    // NEW: Bulk assignment endpoints
+    AVAILABLE_FOR_ASSIGNMENT: `${API_BASE_URL}/assignments/available-for-assignment/`,
+    ASSIGNABLE_USERS: `${API_BASE_URL}/assignments/assignable-users/`,
+    ASSIGNMENT_STATS: `${API_BASE_URL}/assignments/assignment-stats/`,
     // External POs
     EXTERNAL_POS: `${API_BASE_URL}/external-pos/`,
     CREATE_EXTERNAL_PO: `${API_BASE_URL}/external-pos/create/`,

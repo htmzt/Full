@@ -171,28 +171,45 @@
         <section id="assignments-section" class="section">
             <h2>PO Assignments</h2>
             
-            <div class="assignment-create">
-                <h3>Create New Assignment</h3>
-                <form id="create-assignment-form" onsubmit="createAssignment(event)">
-                    <div class="form-group">
-                        <label>PO IDs (comma separated):</label>
-                        <input type="text" id="assignment-po-ids" placeholder="PO123-1, PO123-2" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Assign To:</label>
-                        <select id="assignment-user" required>
-                            <option value="">Select User...</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Notes:</label>
-                        <textarea id="assignment-notes" rows="3"></textarea>
-                    </div>
-                    <button type="submit">Create Assignment</button>
-                </form>
-                <div id="assignment-create-result"></div>
+            <!-- NEW: Bulk Assignment Interface -->
+            <div class="bulk-assignment-interface">
+                <h3>📋 Bulk Assign PO Lines to Users</h3>
+                
+                <!-- Assignment Stats -->
+                <div id="assignment-stats" class="assignment-stats">
+                    <button onclick="loadAssignmentStats()">Refresh Stats</button>
+                </div>
+                
+                <!-- Filters -->
+                <div class="filters">
+                    <input type="text" id="search-po-lines" placeholder="Search PO number, description...">
+                    <select id="filter-po-status">
+                        <option value="">All Status</option>
+                        <option value="CLOSED">CLOSED</option>
+                        <option value="Pending AC80%">Pending AC80%</option>
+                        <option value="Pending PAC20%">Pending PAC20%</option>
+                        <option value="Pending ACPAC">Pending ACPAC</option>
+                        <option value="CANCELLED">CANCELLED</option>
+                    </select>
+                    <select id="filter-po-category">
+                        <option value="">All Categories</option>
+                        <option value="Service">Service</option>
+                        <option value="Survey">Survey</option>
+                        <option value="Transportation">Transportation</option>
+                        <option value="Site Engineer">Site Engineer</option>
+                    </select>
+                    <input type="text" id="filter-po-project" placeholder="Project name...">
+                    <button onclick="loadAvailablePOLinesForAssignment()">Search</button>
+                </div>
+                
+                <!-- Available PO Lines Table -->
+                <div id="available-po-lines-table"></div>
+                <div id="assignment-pagination"></div>
             </div>
-
+            
+            <hr style="margin: 40px 0;">
+            
+            <!-- Existing Assignment Views -->
             <div class="assignments-list">
                 <h3>My Assignments (Assigned to Me)</h3>
                 <button onclick="loadMyAssignments()">Refresh</button>
@@ -205,6 +222,13 @@
                 <div id="created-assignments"></div>
             </div>
         </section>
+
+        <!-- Assignment Modal -->
+        <div id="assignment-modal" class="modal">
+            <div class="modal-content" id="assignment-modal-content">
+                <!-- Content will be dynamically loaded -->
+            </div>
+        </div>
 
         <!-- External POs Section -->
         <section id="external-pos-section" class="section">
@@ -334,6 +358,8 @@
     <script src="js/merged-data.js"></script>
     <script src="js/assignments.js"></script>
     <script src="js/external-pos.js"></script>
+    <script src="js/bulk-assignment.js"></script>
+
     <script src="js/approvals.js"></script>
     <script src="js/users.js"></script>
     <script src="js/main.js"></script>
