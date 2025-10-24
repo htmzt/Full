@@ -190,8 +190,8 @@ class MergedDataExportView(APIView):
         
         # Convert to DataFrame
         data = list(queryset.values(
-            'po_id', 'po_number', 'po_line_no', 'project_name', 'site_name',
-            'item_description', 'category', 'unit_price', 'requested_qty',
+            'po_id', 'po_number', 'po_line_no', 'project_name', 'account_name', 
+            'site_name', 'item_description', 'category', 'unit_price', 'requested_qty',
             'line_amount', 'payment_terms', 'publish_date',
             'ac_date', 'pac_date', 'ac_amount', 'pac_amount',
             'status', 'remaining'
