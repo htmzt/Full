@@ -1,5 +1,5 @@
 """
-User Serializers
+User Serializers - COMPLETE
 """
 from rest_framework import serializers
 from django.contrib.auth import authenticate
@@ -23,6 +23,19 @@ class UserSerializer(serializers.ModelSerializer):
             'created_at', 'last_login'
         ]
         read_only_fields = ['id', 'created_at', 'last_login', 'sbc_code']
+
+
+class UserListSerializer(serializers.ModelSerializer):
+    """User list serializer (simplified for listing)"""
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'email', 'full_name', 'role', 'role_display',
+            'is_active', 'is_locked', 'created_at', 'last_login'
+        ]
+        read_only_fields = ['id', 'created_at', 'last_login']
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
@@ -80,40 +93,37 @@ class LoginSerializer(serializers.Serializer):
             )
             
             if not user:
-                raise serializers.ValidationError("Invalid email or password")
+                raise serializers.ValidationError('Invalid email or password')
             
             if not user.is_active:
-                raise serializers.ValidationError("User account is inactive")
+                raise serializers.ValidationError('User account is disabled')
             
             if user.is_locked:
-                raise serializers.ValidationError("User account is locked")
+                raise serializers.ValidationError('User account is locked')
             
             attrs['user'] = user
             return attrs
-        
-        raise serializers.ValidationError("Must include email and password")
+        else:
+            raise serializers.ValidationError('Email and password are required')
 
 
 class ChangePasswordSerializer(serializers.Serializer):
     """Change password serializer"""
-    old_password = serializers.CharField(write_only=True)
-    new_password = serializers.CharField(write_only=True, min_length=8)
-    new_password_confirm = serializers.CharField(write_only=True, min_length=8)
+    old_password = serializers.CharField(write_only=True, required=True)
+    new_password = serializers.CharField(write_only=True, required=True, min_length=8)
+    new_password_confirm = serializers.CharField(write_only=True, required=True, min_length=8)
     
     def validate(self, attrs):
-        """Validate passwords"""
+        """Validate new passwords match"""
         if attrs['new_password'] != attrs['new_password_confirm']:
-            raise serializers.ValidationError({"new_password": "Passwords don't match"})
+            raise serializers.ValidationError(
+                {"new_password": "New passwords don't match"}
+            )
+        
+        # Ensure new password is different from old
+        if attrs['old_password'] == attrs['new_password']:
+            raise serializers.ValidationError(
+                {"new_password": "New password must be different from old password"}
+            )
+        
         return attrs
-
-
-class UserListSerializer(serializers.ModelSerializer):
-    """Simplified user list serializer"""
-    
-    class Meta:
-        model = User
-        fields = [
-            'id', 'email', 'full_name', 'role', 
-            'sbc_code', 'sbc_company_name',
-            'is_active', 'created_at'
-        ]

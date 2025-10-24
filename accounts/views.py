@@ -1,5 +1,5 @@
 """
-Authentication Views
+Authentication Views - COMPLETE AND CORRECTED
 """
 from rest_framework import status, generics, permissions
 from rest_framework.response import Response
@@ -90,7 +90,7 @@ class ChangePasswordView(APIView):
         # Check old password
         if not user.check_password(serializer.validated_data['old_password']):
             return Response(
-                {'error': 'Incorrect old password'},
+                {'error': 'Old password is incorrect'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -103,29 +103,57 @@ class ChangePasswordView(APIView):
 
 class UserListView(generics.ListAPIView):
     """List all users (Admin only)"""
-    queryset = User.objects.all()
     serializer_class = UserListSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdmin]
-    filterset_fields = ['role', 'is_active']
-    search_fields = ['email', 'full_name', 'sbc_code', 'sbc_company_name']
-    ordering_fields = ['created_at', 'email', 'full_name']
-    ordering = ['-created_at']
+    queryset = User.objects.all().order_by('-created_at')
+    
+    def get_queryset(self):
+        """Filter users by query params"""
+        queryset = super().get_queryset()
+        
+        # Filter by role
+        role = self.request.query_params.get('role', None)
+        if role:
+            queryset = queryset.filter(role=role)
+        
+        # Filter by active status
+        is_active = self.request.query_params.get('is_active', None)
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        # Search by email or name
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                models.Q(email__icontains=search) |
+                models.Q(full_name__icontains=search)
+            )
+        
+        return queryset
 
 
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Get, update, or delete user (Admin only)"""
-    queryset = User.objects.all()
+    """Get, update, or delete a user (Admin only)"""
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    queryset = User.objects.all()
+    lookup_field = 'pk'
     
     def perform_update(self, serializer):
-        """Update user and reset permissions if role changed"""
-        instance = serializer.instance
-        old_role = instance.role
+        """Update user and refresh permissions if role changed"""
+        instance = serializer.save()
         
-        user = serializer.save()
-        
-        # If role changed, reset permissions
-        if user.role != old_role:
-            user.set_permissions_by_role()
-            user.save()
+        # If role was changed, update permissions
+        if 'role' in serializer.validated_data:
+            instance.set_permissions_by_role()
+            instance.save()
+    
+    def destroy(self, request, *args, **kwargs):
+        """Soft delete user by setting is_active=False"""
+        instance = self.get_object()
+        instance.is_active = False
+        instance.save()
+        return Response(
+            {'message': 'User deactivated successfully'},
+            status=status.HTTP_200_OK
+        )
