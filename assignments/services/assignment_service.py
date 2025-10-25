@@ -109,7 +109,6 @@ class AssignmentService:
             assignment.responded_at = timezone.now()
             assignment.save()
             
-            # Mark PO lines as assigned in merged_data (REMOVED user filter!)
             MergedData.objects.filter(
                 po_id__in=assignment.po_ids
             ).update(

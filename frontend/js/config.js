@@ -1,4 +1,4 @@
-// API Configuration
+// API Configuration - FIXED VERSION
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
 
 const API_ENDPOINTS = {
@@ -25,11 +25,13 @@ const API_ENDPOINTS = {
     CREATE_ASSIGNMENT: `${API_BASE_URL}/assignments/create/`,
     MY_ASSIGNMENTS: `${API_BASE_URL}/assignments/my-assignments/`,
     ASSIGNMENT_RESPOND: (id) => `${API_BASE_URL}/assignments/${id}/respond/`,
+    CREATED_ASSIGNMENTS: `${API_BASE_URL}/assignments/`,  // Same as ASSIGNMENTS
     
     // NEW: Bulk assignment endpoints
     AVAILABLE_FOR_ASSIGNMENT: `${API_BASE_URL}/assignments/available-for-assignment/`,
     ASSIGNABLE_USERS: `${API_BASE_URL}/assignments/assignable-users/`,
     ASSIGNMENT_STATS: `${API_BASE_URL}/assignments/assignment-stats/`,
+    
     // External POs
     EXTERNAL_POS: `${API_BASE_URL}/external-pos/`,
     CREATE_EXTERNAL_PO: `${API_BASE_URL}/external-pos/create/`,
@@ -51,88 +53,123 @@ const STORAGE_KEYS = {
     USER_DATA: 'user_data'
 };
 
-// Helper function to get auth headers
-function getAuthHeaders() {
-    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-    return {
-        'Authorization': `Bearer ${token}`
-    };
-}
+// ============================================================================
+// API CALL FUNCTION - FIXED WITH PROPER ERROR HANDLING
+// ============================================================================
 
-// Helper function to make API calls
 async function apiCall(url, options = {}) {
-    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    const defaultHeaders = {
+        'Content-Type': 'application/json',
+    };
     
-    const defaultOptions = {
+    // Add auth token if not skipped
+    if (!options.skipAuth) {
+        const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+        if (token) {
+            defaultHeaders['Authorization'] = `Bearer ${token}`;
+        } else {
+            // No token available
+            console.error('No access token found - redirecting to login');
+            
+            // Only redirect if not already on login page
+            const currentSection = document.querySelector('.section.active');
+            if (currentSection && currentSection.id !== 'login-section') {
+                localStorage.clear();
+                showSection('login');
+            }
+            throw new Error('Not authenticated. Please login.');
+        }
+    }
+    
+    const config = {
+        ...options,
         headers: {
-            ...options.headers
+            ...defaultHeaders,
+            ...(options.headers || {})
         }
     };
     
-    if (token && !options.skipAuth) {
-        defaultOptions.headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    // Don't add Content-Type for FormData
-    if (!(options.body instanceof FormData) && options.headers) {
-        defaultOptions.headers['Content-Type'] = 'application/json';
+    // Remove Content-Type for FormData
+    if (options.body instanceof FormData) {
+        delete config.headers['Content-Type'];
     }
     
     try {
-        const response = await fetch(url, {
-            ...defaultOptions,
-            ...options
-        });
+        console.log(`[API] ${config.method || 'GET'} ${url}`);
+        const response = await fetch(url, config);
         
-        // Handle 401 Unauthorized
-        if (response.status === 401 && !options.skipAuth) {
-            // Token expired or invalid
-            localStorage.clear();
-            showSection('login');
-            document.getElementById('main-nav').style.display = 'none';
-            document.getElementById('user-info').style.display = 'none';
-            showError('login-error', 'Session expired. Please login again.');
-            return null;
-        }
-        
-        const contentType = response.headers.get('content-type');
-        
-        // Handle file downloads
-        if (contentType && contentType.includes('application/vnd.openxmlformats')) {
-            return response.blob();
-        }
-        
-        // Handle JSON responses
-        if (contentType && contentType.includes('application/json')) {
-            const data = await response.json();
+        // Handle 401 Unauthorized - token expired or invalid
+        if (response.status === 401) {
+            console.error('401 Unauthorized - Session expired');
             
-            if (!response.ok) {
-                throw new Error(data.error || data.detail || 'API request failed');
+            // Clear storage and redirect to login
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Show login section
+            const loginSection = document.getElementById('login-section');
+            if (loginSection) {
+                showSection('login');
+                
+                // Show error message
+                const errorDiv = document.getElementById('login-error');
+                if (errorDiv) {
+                    errorDiv.textContent = 'Session expired. Please login again.';
+                    errorDiv.style.display = 'block';
+                }
             }
             
+            throw new Error('Session expired. Please login again.');
+        }
+        
+        // Handle 403 Forbidden - no permission
+        if (response.status === 403) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || 'Permission denied');
+        }
+        
+        // Handle 404 Not Found
+        if (response.status === 404) {
+            throw new Error('Resource not found');
+        }
+        
+        // Handle other errors
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMessage = errorData.error || errorData.detail || errorData.message || `HTTP Error ${response.status}`;
+            throw new Error(errorMessage);
+        }
+        
+        // Return response based on content type
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            const data = await response.json();
+            console.log(`[API] Success:`, data);
             return data;
         }
         
-        // Handle other responses
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(text || 'API request failed');
-        }
-        
+        // For file downloads or other content types
         return response;
         
     } catch (error) {
-        console.error('API call error:', error);
+        console.error(`[API] Error:`, error);
         throw error;
     }
 }
 
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
 // Helper function to show success message
 function showSuccess(elementId, message) {
     const element = document.getElementById(elementId);
+    if (!element) return;
+    
     element.className = 'success';
     element.textContent = message;
     element.style.display = 'block';
+    
     setTimeout(() => {
         element.style.display = 'none';
     }, 5000);
@@ -141,6 +178,8 @@ function showSuccess(elementId, message) {
 // Helper function to show error message
 function showError(elementId, message) {
     const element = document.getElementById(elementId);
+    if (!element) return;
+    
     element.className = 'error';
     element.textContent = message;
     element.style.display = 'block';
@@ -149,6 +188,8 @@ function showError(elementId, message) {
 // Helper function to clear message
 function clearMessage(elementId) {
     const element = document.getElementById(elementId);
+    if (!element) return;
+    
     element.textContent = '';
     element.style.display = 'none';
 }
@@ -156,18 +197,36 @@ function clearMessage(elementId) {
 // Helper function to format date
 function formatDate(dateString) {
     if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    } catch (e) {
+        return dateString;
+    }
 }
 
 // Helper function to format currency
 function formatCurrency(amount) {
-    if (!amount) return '0.00';
-    return parseFloat(amount).toFixed(2);
+    if (!amount && amount !== 0) return '0.00';
+    try {
+        return parseFloat(amount).toFixed(2);
+    } catch (e) {
+        return amount;
+    }
+}
+
+// Helper function to escape HTML (prevent XSS)
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Helper function to get status badge class
 function getStatusBadgeClass(status) {
+    if (!status) return 'badge-pending';
+    
     const statusMap = {
         'PENDING': 'badge-pending',
         'PENDING_PD_APPROVAL': 'badge-pending',
@@ -175,14 +234,20 @@ function getStatusBadgeClass(status) {
         'APPROVED': 'badge-approved',
         'REJECTED': 'badge-rejected',
         'DRAFT': 'badge-draft',
-        'CLOSED': 'badge-closed'
+        'CLOSED': 'badge-closed',
+        'COMPLETED': 'badge-approved',
+        'FAILED': 'badge-rejected',
+        'OPEN': 'badge-pending'
     };
-    return statusMap[status] || 'badge-pending';
+    
+    return statusMap[status.toUpperCase()] || 'badge-pending';
 }
 
 // Helper function to show loading
 function showLoading(elementId) {
     const element = document.getElementById(elementId);
+    if (!element) return;
+    
     element.innerHTML = '<div class="loading"></div> Loading...';
 }
 
@@ -196,4 +261,31 @@ function downloadFile(blob, filename) {
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
+}
+
+// Helper function to check if user is authenticated
+function isAuthenticated() {
+    return !!localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+}
+
+// Helper function to get user data
+function getUserData() {
+    const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
+    return userData ? JSON.parse(userData) : null;
+}
+
+// Helper function to check user permission
+function hasPermission(permissionName) {
+    const user = getUserData();
+    if (!user) return false;
+    return user[permissionName] === true;
+}
+
+// Debug helper - log API calls (set to false in production)
+const DEBUG_MODE = true;
+
+if (DEBUG_MODE) {
+    console.log('[CONFIG] API Base URL:', API_BASE_URL);
+    console.log('[CONFIG] Storage Keys:', STORAGE_KEYS);
+    console.log('[CONFIG] Authenticated:', isAuthenticated());
 }

@@ -146,8 +146,8 @@ class AvailableForAssignmentView(generics.ListAPIView):
         These are available for assignment to users
         """
         return MergedData.objects.filter(
-            #is_assigned=False
-            #has_external_po=False  # Only show lines not yet used in External POs
+            is_assigned=False,
+            has_external_po=False 
         )
     
     def list(self, request, *args, **kwargs):
