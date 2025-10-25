@@ -1,4 +1,5 @@
 // Main application functions
+
 function showSection(sectionName) {
     // Hide all sections
     const sections = document.querySelectorAll('.section');
@@ -11,43 +12,25 @@ function showSection(sectionName) {
     if (targetSection) {
         targetSection.classList.add('active');
         
-        // Load data when section is shown
-        if (sectionName === 'assignments') {
-            const user = getUserData();
-            if (user && (user.can_assign_pos)) {
-                loadAssignmentStats();
-                loadAvailablePOLinesForAssignment();
-                loadAssignableUsers();
-            }
-            loadMyAssignments();
-            loadCreatedAssignments();
-        }
-    }
-}
-function showSection(sectionName) {
-    // Hide all sections
-    const sections = document.querySelectorAll('.section');
-    sections.forEach(section => {
-        section.classList.remove('active');
-    });
-    
-    // Show selected section
-    const targetSection = document.getElementById(`${sectionName}-section`);
-    if (targetSection) {
-        targetSection.classList.add('active');
+        // Trigger custom event for section activation
+        const event = new CustomEvent('showSection', { detail: sectionName });
+        document.dispatchEvent(event);
+    } else {
+        console.warn(`Section ${sectionName}-section not found`);
     }
 }
 
+// Load dashboard data
 async function loadDashboard() {
     const user = getUserData();
+    const userDetails = document.getElementById('current-user-details');
     
     // Display current user details
-    const userDetails = document.getElementById('current-user-details');
-    if (user) {
+    if (user && userDetails) {
         userDetails.innerHTML = `
-            <p><strong>Email:</strong> ${user.email}</p>
-            <p><strong>Full Name:</strong> ${user.full_name}</p>
-            <p><strong>Role:</strong> ${user.role}</p>
+            <p><strong>Email:</strong> ${escapeHtml(user.email)}</p>
+            <p><strong>Full Name:</strong> ${escapeHtml(user.full_name)}</p>
+            <p><strong>Role:</strong> ${escapeHtml(user.role)}</p>
             <p><strong>Permissions:</strong></p>
             <ul>
                 ${user.can_upload_files ? '<li>✅ Can upload files</li>' : ''}
@@ -63,11 +46,11 @@ async function loadDashboard() {
                 ${user.can_view_sbc_work ? '<li>✅ Can view SBC work</li>' : ''}
             </ul>
         `;
+    } else if (userDetails) {
+        userDetails.innerHTML = '<p class="error">⚠️ User data not available</p>';
     }
     
-    // Load stats
     try {
-        // Get merged data stats
         const mergedData = await apiCall(API_ENDPOINTS.MERGED_DATA, {
             method: 'GET'
         });
@@ -80,10 +63,11 @@ async function loadDashboard() {
             
             const externalCount = mergedData.results.filter(po => po.has_external_po).length;
             document.getElementById('stat-external-pos').textContent = externalCount;
+        } else {
+            throw new Error('Invalid merged data response');
         }
         
-        // Get pending approvals count
-        if (user.can_approve_level_1 || user.can_approve_level_2) {
+        if (user && (user.can_approve_level_1 || user.can_approve_level_2)) {
             let pendingCount = 0;
             
             if (user.can_approve_level_1) {
@@ -104,11 +88,17 @@ async function loadDashboard() {
                 }
             }
             
-            document.getElementById('stat-pending-approvals').textContent = pendingCount;
+            const pendingElement = document.getElementById('stat-pending-approvals');
+            if (pendingElement) {
+                pendingElement.textContent = pendingCount;
+            }
         }
-        
     } catch (error) {
         console.error('Error loading dashboard stats:', error);
+        const errorDiv = document.getElementById('dashboard-error');
+        if (errorDiv) {
+            errorDiv.innerHTML = `<p class="error">⚠️ Failed to load dashboard stats: ${error.message}</p>`;
+        }
     }
 }
 
@@ -118,13 +108,33 @@ document.addEventListener('DOMContentLoaded', () => {
     if (roleSelect) {
         roleSelect.addEventListener('change', function() {
             const sbcGroup = document.getElementById('sbc-company-group');
-            if (this.value === 'SBC') {
-                sbcGroup.style.display = 'block';
-                document.getElementById('user-sbc-company').required = true;
-            } else {
-                sbcGroup.style.display = 'none';
-                document.getElementById('user-sbc-company').required = false;
+            if (sbcGroup) {
+                if (this.value === 'SBC') {
+                    sbcGroup.style.display = 'block';
+                    const sbcCompanyInput = document.getElementById('user-sbc-company');
+                    if (sbcCompanyInput) {
+                        sbcCompanyInput.required = true;
+                    }
+                } else {
+                    sbcGroup.style.display = 'none';
+                    const sbcCompanyInput = document.getElementById('user-sbc-company');
+                    if (sbcCompanyInput) {
+                        sbcCompanyInput.required = false;
+                    }
+                }
             }
         });
     }
 });
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.toString().replace(/[&<>"']/g, m => map[m]);
+}
